@@ -65,6 +65,8 @@ struct options {
     size_t max_depth;  // --depth
 };
 
+#define PRINT_SIZE_FMTSTR " [%lld bytes]"
+
 
 DynamicString OutputBuffer;
 #define BUFFER_SIZE 1024
@@ -104,7 +106,8 @@ static inline void warn_if_not_silent( const struct options *flags, string_t fmt
     va_end( vaList );
 }
 
-// ==== // ==== //
+//
+//
 
 List get_entries_sorted( DIR *directory, const struct options *flags )
 {
@@ -147,7 +150,7 @@ int write_buffered( bool is_last,
                 get_character( CHAR_ROW, options ),
                 dirent_name );
         if ( options->size )
-            printf( " (%lld bytes)", f_nbytes );
+            printf( PRINT_SIZE_FMTSTR, f_nbytes );
         printf( "\n" );
 
         return RV_SUCCESS;
@@ -162,7 +165,7 @@ int write_buffered( bool is_last,
                             get_character( CHAR_ROW, options ),
                             dirent_name ) );
     if ( options->size )
-        return_on_fail( dynstr_appendf( OutputBuffer, " (%lld bytes)", f_nbytes ) );
+        return_on_fail( dynstr_appendf( OutputBuffer, PRINT_SIZE_FMTSTR, f_nbytes ) );
     return_on_fail( dynstr_append( OutputBuffer, "\n" ) );
 
     if ( dynstr_len( OutputBuffer ) > BUFFER_SIZE )
@@ -180,10 +183,8 @@ int dive( const int dir_fd,
 {
     DIR *directory = fdopendir( dir_fd );
     if ( directory == NULL )
-    {
-        warn_if_not_silent( options, "fdopendir from fd=%i", dir_fd );
-        return RV_ERROR;
-    }
+        return fwarn_ret( RV_ERROR, "fdopendir from fd=%i", dir_fd );
+
     rewinddir( directory );
 
     int rv = RV_SUCCESS;
