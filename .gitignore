@@ -1,0 +1,9 @@
+*
+
+!.gitignore
+
+!*.c
+!*.sh
+
+!/shallow/
+!/TopLevel/
