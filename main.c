@@ -1,15 +1,26 @@
 #include "../CLibs/dynarr.h"       /* List */
 #include "../CLibs/dynstring.h"    /* dynstr */
 #include "../CLibs/errors.h"       /* RVs, warn() */
-#include "../CLibs/string_utils.h" /* types, get_file_name() */
+#include "../CLibs/string_utils.h" /* types */
 
 #include <dirent.h>   /* directory stuff */
 #include <fcntl.h>    /* open(), close() */
+#include <stdarg.h>   /* va_list */
+#include <stdio.h>    /* fprintf() */
 #include <stdlib.h>   /* exit() */
 #include <string.h>   /* strcmp() */
 #include <sys/stat.h> /* stat */
 
+#ifndef __unused
+#define __unused
+#endif //__unused
 
+#ifndef O_SYMLINK
+#define O_SYMLINK 0
+#endif //O_SYMLINK
+
+
+/// Help message for the user
 #define HELP_MESSAGE                                                                \
     "Displays a directory and its sub-directories as a tree, kinda like 'tree' on " \
     "windows\n"                                                                     \
@@ -37,20 +48,22 @@
 #define CORNER_ASCII "\\"
 #define JOINT_ASCII  "|"
 
-#define SPACE_STR " "
-
-string_t UTF_CHARSET[ 5 ] = {
-    SPACE_STR, COLUMN_UTF, ROW_UTF, CORNER_UTF, JOINT_UTF,
+string_t UTF_CHARSET[ 4 ] = {
+    COLUMN_UTF,
+    ROW_UTF,
+    CORNER_UTF,
+    JOINT_UTF,
 };
 
-string_t ASCII_CHARSET[ 5 ] = {
-    SPACE_STR, COLUMN_ASCII, ROW_ASCII, CORNER_ASCII, JOINT_ASCII,
+string_t ASCII_CHARSET[ 4 ] = {
+    COLUMN_ASCII,
+    ROW_ASCII,
+    CORNER_ASCII,
+    JOINT_ASCII,
 };
 
 enum characters {
-    CHAR_SPACE __unused = 0,
-
-    CHAR_COLUMN = 1,
+    CHAR_COLUMN = 0,
     CHAR_ROW,
     CHAR_CORNER,
     CHAR_JOINT,
@@ -63,10 +76,11 @@ struct options {
     bool warn_on_fail; // -e
     bool buffered;     // -B
     string_t *charset; // -c
+                       // default UTF; -c => ASCII
     size_t max_depth;  // --depth
 };
 
-#define PRINT_SIZE_FMTSTR " [%lld bytes]"
+#define PRINT_SIZE_FMTSTR " [%llu bytes]"
 
 
 DynamicString OutputBuffer;
@@ -81,10 +95,7 @@ static inline bool should_skip_entry( string_t const name,
     if ( strcmp( name, "." ) == 0 || strcmp( name, ".." ) == 0 )
         return true;
 
-    if ( flags->all || name[ 0 ] != '.' )
-        return false;
-
-    return true;
+    return !flags->all && name[ 0 ] == '.';
 }
 
 static inline int stringp_cmp( const void *d1, const void *d2 )
@@ -92,7 +103,9 @@ static inline int stringp_cmp( const void *d1, const void *d2 )
     return strcmp( *( string_t * ) d1, *( string_t * ) d2 );
 }
 
-static inline void warn_if_not_silent( const struct options *flags, string_t fmt, ... )
+__unused static inline void warn_if_not_silent( const struct options *flags,
+                                                string_t fmt,
+                                                ... )
 {
     if ( !flags->warn_on_fail )
         return;
@@ -136,7 +149,7 @@ int write_buffered( bool is_last,
                     string_t dirent_name,
                     ConstDynamicString pre,
                     const struct options *const options,
-                    const long long f_nbytes )
+                    const unsigned long long int f_nbytes )
 {
     if ( !options->buffered )
     {
@@ -194,28 +207,26 @@ int dive( const int dir_fd,
     {
         dirent = list_access( entries, index, str_t );
 
-        if ( ( rv = fstatat( dir_fd, dirent, &stat_data, AT_SYMLINK_NOFOLLOW ) ) !=
-             RV_SUCCESS )
+        if ( fstatat( dir_fd, dirent, &stat_data, 0 ) != RV_SUCCESS )
         {
             warn_if_not_silent( options, "fstatat for '%s'", dirent );
             continue;
         }
         bool is_last = index == list_size( entries ) - 1;
 
-        if ( write_buffered(
-                     is_last, dirent, pre, options, ( long long ) stat_data.st_size ) !=
+        if ( ( rv = write_buffered( is_last,
+                                    dirent,
+                                    pre,
+                                    options,
+                                    ( unsigned long long ) stat_data.st_size ) ) !=
              RV_SUCCESS )
-        {
-            f_stack_trace();
-            return RV_ERROR;
-        }
+            break;
 
-        // ======= //
 
         if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth )
             continue;
 
-        int subdir_fd = openat( dir_fd, dirent, O_DIRECTORY | O_RDONLY | O_SYMLINK );
+        int subdir_fd = openat( dir_fd, dirent, O_DIRECTORY | O_RDONLY );
         if ( subdir_fd == RV_ERROR )
         {
             warn_if_not_silent( options, "trying to open '%s'", dirent );
@@ -227,11 +238,12 @@ int dive( const int dir_fd,
                 buf, 10, "%s   ", is_last ? " " : get_character( CHAR_COLUMN, options ) );
 
         if ( ( rv = dynstr_append( pre, buf ) ) != RV_SUCCESS )
-        {
-            f_stack_trace();
             break;
-        }
 
+        if ( strcmp( dirent, "Images" ) == 0 )
+        {
+            //
+        }
         if ( ( rv = dive( subdir_fd, options, level + 1, pre ) ) != RV_SUCCESS )
             break;
 
@@ -252,12 +264,12 @@ int dive( const int dir_fd,
 static inline void parse_special( string_t arg, struct options *const options )
 {
 #define DEPTH_OPT "--depth="
-    if ( strncmp( arg, DEPTH_OPT, sizeof DEPTH_OPT ) == 0 )
+    if ( strstr( arg, DEPTH_OPT ) == arg )
     {
-        const char *num_str = arg + sizeof DEPTH_OPT;
+        const char *num_str = arg + sizeof DEPTH_OPT - 1;
         options->max_depth  = strtoll( num_str, NULL, 10 );
         if ( errno != E_OK )
-            err( EXIT_FAILURE, "invalid depth: %s", num_str );
+            err( EXIT_FAILURE, "invalid depth: '%s'", num_str );
     }
     else if ( strcmp( arg, "--help" ) == 0 )
     {
