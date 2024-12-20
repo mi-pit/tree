@@ -73,11 +73,7 @@ DynamicString OutputBuffer;
 #define BUFFER_SIZE 1024
 
 
-static inline string_t get_character( enum characters ch,
-                                      const struct options *const opts )
-{
-    return opts->charset[ ch ];
-}
+#define get_character( ENUM_CHAR, OPTS_PTR ) ( OPTS_PTR->charset[ ENUM_CHAR ] )
 
 static inline bool should_skip_entry( string_t const name,
                                       const struct options *const flags )
@@ -250,24 +246,24 @@ int dive( const int dir_fd,
     return rv;
 }
 
-// ==== // ==== //
+//
+//
 
-void parse_special( string_t arg, struct options *const options )
+static inline void parse_special( string_t arg, struct options *const options )
 {
-    if ( strstr( arg, "--depth=" ) == arg )
+#define DEPTH_OPT "--depth="
+    if ( strncmp( arg, DEPTH_OPT, sizeof DEPTH_OPT ) == 0 )
     {
-        const char *num_str = arg + 8;
+        const char *num_str = arg + sizeof DEPTH_OPT;
         options->max_depth  = strtoll( num_str, NULL, 10 );
         if ( errno != E_OK )
             err( EXIT_FAILURE, "invalid depth: %s", num_str );
-        return;
     }
-
-    if ( strcmp( arg, "--help" ) == 0 )
+    else if ( strcmp( arg, "--help" ) == 0 )
     {
         printf( "%s", HELP_MESSAGE );
-        return;
     }
+#undef DEPTH_OPT
 }
 
 void parse_options( string_t opts, struct options *options )
@@ -310,9 +306,8 @@ void parse_args( int argc, const char *const *argv, List paths, struct options *
         string_t const arg = argv[ i ];
 
         if ( arg[ 0 ] == '-' )
-        {
             parse_options( arg, options );
-        }
+
         else if ( list_append( paths, &arg ) != RV_SUCCESS )
         {
             f_stack_trace();
