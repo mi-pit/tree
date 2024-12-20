@@ -21,6 +21,7 @@
     " open/stat/... a file.\n"                                                      \
     "              \tWarning messages still appear when given invalid args"         \
     " or when memory allocation fails.\n"                                           \
+    "    -B        \tBuffers output before printing"                                \
     "    --depth=%i\twhere %i is a positive integer; Only goes %i levels deep"      \
     " (the starting directory is level 0)\n"                                        \
     "    --help    \tDisplay this message.\n"
