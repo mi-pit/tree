@@ -15,10 +15,6 @@
 #define __unused
 #endif //__unused
 
-#ifndef O_SYMLINK
-#define O_SYMLINK 0
-#endif //O_SYMLINK
-
 
 /// Help message for the user
 #define HELP_MESSAGE                                                                \
