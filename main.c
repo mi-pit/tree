@@ -63,16 +63,12 @@ struct options {
     bool buffered;     // -B
     string_t *charset; // -c
     size_t max_depth;  // --depth
-
-    size_t buffer_size;
-    DynamicString OutputBuffer;
 };
 
-struct OutputBuffer {
-    size_t buffer_size;
 
-    str_t
-};
+DynamicString OutputBuffer;
+#define BUFFER_SIZE 1024
+
 
 static inline string_t get_character( enum characters ch,
                                       const struct options *const opts )
