@@ -4,6 +4,3 @@
 
 !*.c
 !*.sh
-
-!/shallow/
-!/TopLevel/
