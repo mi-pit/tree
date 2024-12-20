@@ -210,13 +210,12 @@ int dive( const int dir_fd,
         }
         bool is_last = index == list_size( entries ) - 1;
 
-        if ( ( rv = write_buffered( is_last,
-                                    dirent,
-                                    pre,
-                                    options,
-                                    ( unsigned long long ) stat_data.st_size ) ) !=
-             RV_SUCCESS )
-            break;
+        if ( write_buffered( is_last,
+                             dirent,
+                             pre,
+                             options,
+                             ( unsigned long long ) stat_data.st_size ) != RV_SUCCESS )
+            exit( EXIT_FAILURE );
 
 
         if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth )
@@ -233,20 +232,16 @@ int dive( const int dir_fd,
         size_t char_count = snprintf(
                 buf, 10, "%s   ", is_last ? " " : get_character( CHAR_COLUMN, options ) );
 
-        if ( ( rv = dynstr_append( pre, buf ) ) != RV_SUCCESS )
-            break;
+        if ( dynstr_append( pre, buf ) != RV_SUCCESS )
+            exit( EXIT_FAILURE );
 
-        if ( strcmp( dirent, "Images" ) == 0 )
-        {
-            //
-        }
         if ( ( rv = dive( subdir_fd, options, level + 1, pre ) ) != RV_SUCCESS )
             break;
 
         if ( ( rv = dynstr_slice_e( pre,
                                     ( ssize_t ) ( dynstr_len( pre ) - char_count ) ) ) !=
              RV_SUCCESS )
-            break;
+            exit( EXIT_FAILURE );
     }
 
     list_destroy( entries );
