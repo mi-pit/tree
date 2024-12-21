@@ -3,16 +3,23 @@
 //
 
 #include <err.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+static void unlink_if_exists( const char *name )
+{
+    if ( unlinkat( AT_FDCWD, name, 0 ) == -1 && errno != ENOENT )
+        err( 2, "unlinking %s", name );
+}
+
 
 int main( int argc, char **argv )
 {
-    system( "rm -r ./sub-0" );
+    system( "rm -rf ./sub-0" );
 
     size_t n_sub;
     if ( argc == 1 )
@@ -44,5 +51,12 @@ int main( int argc, char **argv )
             warn( "fchdir" );
             return EXIT_FAILURE;
         }
+
+        unlink_if_exists( "a_file.txt" );
+        unlink_if_exists( "z_file.txt" );
+        if ( close( open( "a_file.txt", O_CREAT | O_TRUNC | O_WRONLY ) ) != 0 )
+            warn( "close" );
+        if ( close( open( "z_file.txt", O_CREAT | O_TRUNC | O_WRONLY ) ) != 0 )
+            warn( "close" );
     }
 }
