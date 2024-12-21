@@ -99,9 +99,7 @@ static inline int stringp_cmp( const void *d1, const void *d2 )
     return strcmp( *( string_t * ) d1, *( string_t * ) d2 );
 }
 
-__unused static inline void warn_if_not_silent( const struct options *flags,
-                                                string_t fmt,
-                                                ... )
+static inline void warn_if_not_silent( const struct options *flags, string_t fmt, ... )
 {
     if ( !flags->warn_on_fail )
         return;

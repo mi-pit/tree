@@ -10,4 +10,8 @@ add_executable(Tree
         ../CLibs/dynarr.c
         ../CLibs/dynstring.c
         ../CLibs/errors.c
-        )
+)
+
+add_executable(mk-sub-dir
+        make_subdir.c
+)
