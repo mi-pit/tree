@@ -1,7 +1,7 @@
-#include "../CLibs/dynarr.h"       /* List */
-#include "../CLibs/dynstring.h"    /* dynstr */
-#include "../CLibs/errors.h"       /* RVs, warn() */
-#include "../CLibs/string_utils.h" /* types */
+#include "../CLibs/Dev/errors.h"     /* RVs, warn() */
+#include "../CLibs/misc.h"           /* countof */
+#include "../CLibs/string_utils.h"   /* types */
+#include "../CLibs/Structs/dynarr.h" /* List */
 
 #include <dirent.h>   /* directory stuff */
 #include <fcntl.h>    /* open(), close() */
@@ -11,27 +11,27 @@
 #include <string.h>   /* strcmp() */
 #include <sys/stat.h> /* stat */
 
-#ifndef __unused
-#define __unused
-#endif //__unused
+// TODO:
+//  HELP_MESSAGE_MAP
+//  try this in SSC
 
 
 /// Help message for the user
-#define HELP_MESSAGE                                                                \
-    "Displays a directory and its sub-directories as a tree, kinda like 'tree' on " \
-    "windows\n"                                                                     \
-    "Options:\n"                                                                    \
-    "    -a        \tInclude directory entries whose names begin with a dot.\n"     \
-    "    -s        \tDisplay the size of each file.\n"                              \
-    "    -c        \tOnly use ASCII characters.\n"                                  \
-    "    -e        \tSuppress messages to stderr when failing to"                   \
-    " open/stat/... a file.\n"                                                      \
-    "              \tWarning messages still appear when given invalid args"         \
-    " or when memory allocation fails.\n"                                           \
-    "    -B        \tBuffers output before printing"                                \
-    "    --depth=%i\twhere %i is a positive integer; Only goes %i levels deep"      \
-    " (the starting directory is level 0)\n"                                        \
-    "    --help    \tDisplay this message.\n"
+const string_t HELP_MESSAGE_MAP[][ 2 ] = {
+    { "-a", "Include directory entries whose names begin with a dot." },
+    { "-s", "Display the size of each file." },
+    { "-c", "Only use ASCII characters." },
+    { "-e", "Print an error message to stderr when failing to open/stat/... a file." },
+    { "-B", "Buffers output before printing." },
+    { "--depth=%i", "where %i is a positive integer; Only goes %i levels deep (the"
+                    " starting directory is level 0)." },
+    { "--help", "Display this message." }
+};
+
+#define HELP_MESSAGE                                                            \
+    "Displays a directory and its sub-directories as a tree, kinda like 'tree'" \
+    " on windows\n"                                                             \
+    "Options:\n"
 
 
 #define COLUMN_UTF "│"
@@ -79,11 +79,12 @@ struct options {
 #define PRINT_SIZE_FMTSTR " [%llu bytes]"
 
 
-DynamicString OutputBuffer;
+struct dynamic_string *OutputBuffer;
 #define BUFFER_SIZE 1024
 
 
 #define get_character( ENUM_CHAR, OPTS_PTR ) ( OPTS_PTR->charset[ ENUM_CHAR ] )
+
 
 static inline bool should_skip_entry( string_t const name,
                                       const struct options *const flags )
@@ -113,14 +114,11 @@ static inline void warn_if_not_silent( const struct options *flags, string_t fmt
 //
 //
 
-List get_entries_sorted( DIR *directory, const struct options *flags )
+List *get_entries_sorted( DIR *directory, const struct options *flags )
 {
-    List entries = list_init_type( str_t );
+    List *entries = list_init_type( str_t );
     if ( entries == NULL )
-    {
-        f_stack_trace();
-        return NULL;
-    }
+        return ( void * ) f_stack_trace( NULL );
 
     struct dirent *dirent;
     while ( ( dirent = readdir( directory ) ) != NULL )
@@ -183,7 +181,7 @@ int write_buffered( bool is_last,
 int dive( const int dir_fd,
           const struct options *const options,
           const size_t level,
-          DynamicString pre )
+          struct dynamic_string *const pre )
 {
     DIR *directory = fdopendir( dir_fd );
     if ( directory == NULL )
@@ -193,7 +191,7 @@ int dive( const int dir_fd,
 
     int rv = RV_SUCCESS;
 
-    List entries = get_entries_sorted( directory, options );
+    List *entries = get_entries_sorted( directory, options );
 
     struct stat stat_data;
     str_t dirent;
@@ -262,7 +260,14 @@ static inline void parse_special( string_t arg, struct options *const options )
     }
     else if ( strcmp( arg, "--help" ) == 0 )
     {
-        printf( "%s", HELP_MESSAGE );
+        printf( HELP_MESSAGE );
+        for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
+        {
+            printf( "\t%s\t %s\n",
+                    HELP_MESSAGE_MAP[ i ][ 0 ],
+                    HELP_MESSAGE_MAP[ i ][ 1 ] );
+        }
+        exit( EXIT_SUCCESS );
     }
 #undef DEPTH_OPT
 }
@@ -300,7 +305,7 @@ void parse_options( string_t opts, struct options *options )
     }
 }
 
-void parse_args( int argc, const char *const *argv, List paths, struct options *options )
+void parse_args( int argc, const char *const *argv, List *paths, struct options *options )
 {
     for ( int i = 1; i < argc; ++i )
     {
@@ -311,7 +316,7 @@ void parse_args( int argc, const char *const *argv, List paths, struct options *
 
         else if ( list_append( paths, &arg ) != RV_SUCCESS )
         {
-            f_stack_trace();
+            f_stack_trace( 0 );
             exit( EXIT_FAILURE );
         }
     }
@@ -321,7 +326,7 @@ void parse_args( int argc, const char *const *argv, List paths, struct options *
         string_t curr_dir = ".";
         if ( list_append( paths, &curr_dir ) != RV_SUCCESS )
         {
-            f_stack_trace();
+            f_stack_trace( 0 );
             exit( EXIT_FAILURE );
         }
     }
@@ -329,13 +334,7 @@ void parse_args( int argc, const char *const *argv, List paths, struct options *
 
 int main( int argc, const char *const *const argv )
 {
-    if ( argc > 1 && strcmp( argv[ 1 ], "--help" ) == 0 )
-    {
-        printf( "%s", HELP_MESSAGE );
-        exit( EXIT_SUCCESS );
-    }
-
-    List paths             = list_init_type( str_t );
+    List *paths            = list_init_type( str_t );
     struct options options = { 0 };
     options.charset        = UTF_CHARSET;
     options.max_depth      = SIZE_MAX;
@@ -354,7 +353,10 @@ int main( int argc, const char *const *const argv )
 
         int dir_fd = open( path, O_DIRECTORY | O_RDONLY );
         if ( dir_fd == RV_ERROR )
-            err( EXIT_FAILURE, "could not open '%s'", path );
+        {
+            warn( "could not open '%s'", path );
+            continue;
+        }
         printf( "%s\n", path );
         if ( options.max_depth == 0 )
             continue;

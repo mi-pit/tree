@@ -3,13 +3,10 @@ project(CLibs C)
 
 set(CMAKE_C_STANDARD 23)
 
-include_directories(.)
-
 add_executable(Tree
         main.c
-        ../CLibs/dynarr.c
-        ../CLibs/dynstring.c
-        ../CLibs/errors.c
+        ../CLibs/Structs/dynarr.c
+        ../CLibs/Structs/dynstring.c
 )
 
 add_executable(mk-sub-dir

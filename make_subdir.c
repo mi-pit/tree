@@ -16,22 +16,16 @@ static void unlink_if_exists( const char *name )
         err( 2, "unlinking %s", name );
 }
 
-
 int main( int argc, char **argv )
 {
     system( "rm -rf ./sub-0" );
 
-    size_t n_sub;
-    if ( argc == 1 )
-        n_sub = 10;
-    else
-        n_sub = strtoll( argv[ 1 ], NULL, 10 );
+    size_t n_sub = argc == 1 ? 10 : strtoll( argv[ 1 ], NULL, 10 );
 
     for ( size_t i = 0; i < n_sub; ++i )
     {
         char name[ 1024 ] = { 0 };
         snprintf( name, 1024, "sub-%zu", i );
-
 
         if ( mkdir( name, 0777 ) == -1 )
         {
@@ -39,7 +33,7 @@ int main( int argc, char **argv )
             return EXIT_FAILURE;
         }
 
-        int dir_fd = open( name, O_DIRECTORY, 0777 );
+        int dir_fd = open( name, O_DIRECTORY );
         if ( dir_fd == -1 )
         {
             warn( "open '%s'", name );
