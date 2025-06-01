@@ -11,6 +11,7 @@
 #include <stdlib.h>   /* exit */
 #include <string.h>   /* strcmp */
 #include <sys/stat.h> /* stat */
+#include <unistd.h>   /* readlink */
 
 /*
  * TODO:
@@ -78,7 +79,6 @@ struct options {
     bool all;          // -a
     bool size;         // -s
     bool warn_on_fail; // -e
-    bool buffered;     // -B
     string_t *charset; // -c
                        // default UTF; -c => ASCII
     size_t max_depth;  // --depth
@@ -159,9 +159,20 @@ void write_dirent( bool is_last,
 
     if ( options->size )
         printf( PRINT_SIZE_FMTSTR, f_nbytes );
+}
+
+/// prints "-> [name]" for target of a symlink
+static void print_link_target( const int dir_at_fd, const string_t dirent )
+{
+    char buffer[ PATH_MAX ] = { 0 };
+    if ( readlinkat( dir_at_fd, dirent, buffer, sizeof buffer ) == RV_ERROR )
+    {
         printf( "\n" );
+        warn( "readlink( %s )", dirent );
+        return;
     }
 
+    printf( " -> '%s'\n", buffer );
 }
 
 
@@ -186,7 +197,7 @@ int dive( const int dir_fd,
     {
         dirent = list_access( entries, index, str_t );
 
-        if ( fstatat( dir_fd, dirent, &stat_data, 0 ) != RV_SUCCESS )
+        if ( fstatat( dir_fd, dirent, &stat_data, AT_SYMLINK_NOFOLLOW ) != RV_SUCCESS )
         {
             warn_if_not_silent( options, "fstatat for '%s'", dirent );
             continue;
@@ -203,6 +214,13 @@ int dive( const int dir_fd,
 
         write_dirent( is_last, dirent, dirent_type, pre, options, stat_data.st_size );
 
+        if ( S_ISLNK( stat_data.st_mode ) )
+        {
+            print_link_target( dir_fd, dirent );
+            continue;
+        }
+
+        printf( "\n" );
 
         if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth )
             continue;
@@ -280,9 +298,6 @@ void parse_options( string_t opts, struct options *options )
                 break;
             case 'e':
                 options->warn_on_fail = true;
-                break;
-            case 'B':
-                options->buffered = true;
                 break;
 
             case '-':
