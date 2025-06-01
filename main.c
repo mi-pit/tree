@@ -1,4 +1,4 @@
-#include "../CLibs/Dev/errors.h"        /* RVs, warn */
+#include "../CLibs/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
 #include "../CLibs/misc.h"              /* countof */
 #include "../CLibs/string_utils.h"      /* types */
 #include "../CLibs/Structs/dynarr.h"    /* List */
@@ -27,11 +27,12 @@
 
 
 /// Help message for the user
-const string_t HELP_MESSAGE_MAP[][ 2 ] = {
+string_t HELP_MESSAGE_MAP[][ 2 ] = {
     { "-a", "Include directory entries whose names begin with a dot." },
     { "-s", "Display the size of each file." },
     { "-c", "Only use ASCII characters." },
     { "-e", "Print an error message to stderr when failing to open/stat/... a file." },
+    { "-l", "Acts on the target of a symlink instead of the symlink itself." },
     { "--depth=%i", "where %i is a positive integer; Only goes %i levels deep (the"
                     " starting directory is level 0)." },
     { "--help", "Display this message." }
@@ -79,18 +80,21 @@ struct options {
     bool all;          // -a
     bool size;         // -s
     bool warn_on_fail; // -e
+    bool follow_links; // -l
     string_t *charset; // -c
                        // default UTF; -c => ASCII
     size_t max_depth;  // --depth
 };
 
-#define PRINT_SIZE_FMTSTR " [%zu bytes]"
 
+/* ================================ Helpers ================================ */
+
+#define PRINT_SIZE_FMTSTR " [%zu bytes]"
 
 #define get_character( ENUM_CHAR, OPTS_PTR ) ( OPTS_PTR->charset[ ENUM_CHAR ] )
 
 
-static inline bool should_skip_entry( string_t const name,
+static inline bool should_skip_entry( const string_t name,
                                       const struct options *const flags )
 {
     if ( strcmp( name, "." ) == 0 || strcmp( name, ".." ) == 0 )
@@ -104,7 +108,9 @@ static inline int stringp_cmp( const void *d1, const void *d2 )
     return strcmp( *( string_t * ) d1, *( string_t * ) d2 );
 }
 
-static inline void warn_if_not_silent( const struct options *flags, string_t fmt, ... )
+static inline void warn_if_not_silent( const struct options *flags,
+                                       const string_t fmt,
+                                       ... )
 {
     if ( !flags->warn_on_fail )
         return;
@@ -115,10 +121,17 @@ static inline void warn_if_not_silent( const struct options *flags, string_t fmt
     va_end( vaList );
 }
 
-//
-//
 
-List *get_entries_sorted( DIR *const directory, const struct options *const flags )
+/* ================================ Dirent Stuff ================================ */
+
+/**
+ * Gets an alphabetically sorted list of directory entries
+ *
+ * @param directory directory to go through
+ * @param flags options for \code should_skip_entry\endcode
+ * @return List (struct dynamic_array) of directory-entry names
+ */
+static List *get_entries_sorted( DIR *const directory, const struct options *const flags )
 {
     List *entries = list_init_type( str_t );
     if ( entries == NULL )
@@ -141,19 +154,30 @@ List *get_entries_sorted( DIR *const directory, const struct options *const flag
     return entries;
 }
 
-void write_dirent( bool is_last,
-                   string_t dirent_name,
-                   string_t dirent_type,
-                   const struct dynamic_string *const pre,
-                   const struct options *const options,
-                   const size_t f_nbytes )
+/**
+ * Prints the directory entry -- tree structure + name (in color) + [optionally] file size
+ *
+ * @param is_last true if dirent is the last printable entry in the directory
+ * @param dirent_name   name of the entry
+ * @param dirent_color  color string for the specific type
+ *                      (see \code CLibs/Dev/terminal_colors.h\endcode)
+ * @param pre           tree structure
+ * @param options       options (-c, -s)
+ * @param f_nbytes      size of file
+ */
+static void write_dirent( const bool is_last,
+                          const string_t dirent_name,
+                          const string_t dirent_color,
+                          const struct dynamic_string *const pre,
+                          const struct options *const options,
+                          const size_t f_nbytes )
 {
     printf( "%s", dynstr_data( pre ) );
     printf( "%s%s%s %s%s%s",
             get_character( is_last ? CHAR_CORNER : CHAR_JOINT, options ),
             get_character( CHAR_ROW, options ),
             get_character( CHAR_ROW, options ),
-            dirent_type,
+            dirent_color,
             dirent_name,
             COLOR_DEFAULT );
 
@@ -172,7 +196,7 @@ static void print_link_target( const int dir_at_fd, const string_t dirent )
         return;
     }
 
-    printf( " -> '%s'\n", buffer );
+    printf( " -> '%s'", buffer );
 }
 
 
@@ -183,7 +207,7 @@ int dive( const int dir_fd,
 {
     DIR *directory = fdopendir( dir_fd );
     if ( directory == NULL )
-        return fwarn_ret( RV_ERROR, "fdopendir from fd=%i", dir_fd );
+        return fflwarn_ret( RV_ERROR, "fdopendir from fd=%i", dir_fd );
 
     rewinddir( directory );
 
@@ -191,13 +215,17 @@ int dive( const int dir_fd,
 
     List *entries = get_entries_sorted( directory, options );
 
-    struct stat stat_data;
     str_t dirent;
     for ( size_t index = 0; index < list_size( entries ); ++index, free( dirent ) )
     {
         dirent = list_access( entries, index, str_t );
 
-        if ( fstatat( dir_fd, dirent, &stat_data, AT_SYMLINK_NOFOLLOW ) != RV_SUCCESS )
+        struct stat stat_data;
+        if ( fstatat( dir_fd,
+                      dirent,
+                      &stat_data,
+                      options->follow_links ? AT_SYMLINK_FOLLOW : AT_SYMLINK_NOFOLLOW ) !=
+             RV_SUCCESS )
         {
             warn_if_not_silent( options, "fstatat for '%s'", dirent );
             continue;
@@ -215,10 +243,7 @@ int dive( const int dir_fd,
         write_dirent( is_last, dirent, dirent_type, pre, options, stat_data.st_size );
 
         if ( S_ISLNK( stat_data.st_mode ) )
-        {
             print_link_target( dir_fd, dirent );
-            continue;
-        }
 
         printf( "\n" );
 
@@ -256,7 +281,7 @@ int dive( const int dir_fd,
 //
 //
 
-static inline void parse_special( string_t arg, struct options *const options )
+static inline void parse_special( const string_t arg, struct options *const options )
 {
 #define DEPTH_OPT "--depth="
     if ( strstr( arg, DEPTH_OPT ) == arg )
@@ -277,12 +302,17 @@ static inline void parse_special( string_t arg, struct options *const options )
         }
         exit( EXIT_SUCCESS );
     }
+    else
+    {
+        errx( EXIT_FAILURE, "unknown option '%s'", arg );
+    }
 #undef DEPTH_OPT
 }
 
-void parse_options( string_t opts, struct options *options )
+void parse_options( const string_t opts, struct options *options )
 {
     const size_t str_len = strlen( opts );
+    bool invalid         = true;
     for ( size_t i = 1; i < str_len; ++i )
     {
         switch ( opts[ i ] )
@@ -299,6 +329,8 @@ void parse_options( string_t opts, struct options *options )
             case 'e':
                 options->warn_on_fail = true;
                 break;
+            case 'l':
+                options->follow_links = true;
 
             case '-':
                 parse_special( opts, options );
@@ -307,14 +339,21 @@ void parse_options( string_t opts, struct options *options )
             default:
                 errx( EXIT_FAILURE, "invalid option: '%c'", opts[ i ] );
         }
+        invalid = false;
     }
+
+    if ( invalid )
+        errx( EXIT_FAILURE, "unknown option '%s'", opts );
 }
 
-void parse_args( int argc, const char *const *argv, List *paths, struct options *options )
+void parse_args( const int argc,
+                 const char *const *argv,
+                 List *paths,
+                 struct options *options )
 {
     for ( int i = 1; i < argc; ++i )
     {
-        string_t const arg = argv[ i ];
+        const string_t arg = argv[ i ];
 
         if ( arg[ 0 ] == '-' )
             parse_options( arg, options );
@@ -328,7 +367,7 @@ void parse_args( int argc, const char *const *argv, List *paths, struct options 
 
     if ( list_size( paths ) == 0 )
     {
-        string_t curr_dir = ".";
+        const string_t curr_dir = ".";
         if ( list_append( paths, &curr_dir ) != RV_SUCCESS )
         {
             f_stack_trace( 0 );
@@ -352,7 +391,7 @@ int main( const int argc, const char *const *const argv )
     int rv = RV_EXCEPTION; // value used if no path is specified
     for ( size_t i = 0; i < list_size( paths ); ++i )
     {
-        string_t path = list_access( paths, i, string_t );
+        const string_t path = list_access( paths, i, string_t );
 
         const int dir_fd = open( path, O_DIRECTORY | O_RDONLY );
         if ( dir_fd == RV_ERROR )
