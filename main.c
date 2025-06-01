@@ -12,9 +12,17 @@
 #include <string.h>   /* strcmp */
 #include <sys/stat.h> /* stat */
 
-// TODO:
-//  HELP_MESSAGE_MAP
-//  try this in SSC
+/*
+ * TODO:
+ *  Symlink option
+ */
+
+#define COLOR_RESET "\033[0m"
+#define COLOR_DIR   "\033[1;34m" // bold blue
+#define COLOR_LNK   FOREGROUND_MAGENTA
+#define COLOR_EXE   FOREGROUND_RED
+#define COLOR_FIFO  FOREGROUND_YELLOW
+#define COLOR_SOCK  FOREGROUND_GREEN
 
 
 /// Help message for the user
@@ -23,7 +31,6 @@ const string_t HELP_MESSAGE_MAP[][ 2 ] = {
     { "-s", "Display the size of each file." },
     { "-c", "Only use ASCII characters." },
     { "-e", "Print an error message to stderr when failing to open/stat/... a file." },
-    { "-B", "Buffers output before printing." },
     { "--depth=%i", "where %i is a positive integer; Only goes %i levels deep (the"
                     " starting directory is level 0)." },
     { "--help", "Display this message." }
@@ -77,10 +84,6 @@ struct options {
     size_t max_depth;  // --depth
 };
 
-
-
-struct dynamic_string *OutputBuffer;
-#define BUFFER_SIZE 1024
 #define PRINT_SIZE_FMTSTR " [%zu bytes]"
 
 
@@ -138,46 +141,29 @@ List *get_entries_sorted( DIR *const directory, const struct options *const flag
     return entries;
 }
 
-int write_buffered( bool is_last,
-                    string_t dirent_name,
-                    ConstDynamicString pre,
-                    const struct options *const options,
-                    const unsigned long long int f_nbytes )
+void write_dirent( bool is_last,
+                   string_t dirent_name,
+                   string_t dirent_type,
+                   const struct dynamic_string *const pre,
+                   const struct options *const options,
+                   const size_t f_nbytes )
 {
-    if ( !options->buffered )
-    {
-        printf( "%s", dynstr_data( pre ) );
-        printf( "%s%s%s %s",
-                get_character( is_last ? CHAR_CORNER : CHAR_JOINT, options ),
-                get_character( CHAR_ROW, options ),
-                get_character( CHAR_ROW, options ),
-                dirent_name );
-        if ( options->size )
-            printf( PRINT_SIZE_FMTSTR, f_nbytes );
-        printf( "\n" );
+    printf( "%s", dynstr_data( pre ) );
+    printf( "%s%s%s %s%s%s",
+            get_character( is_last ? CHAR_CORNER : CHAR_JOINT, options ),
+            get_character( CHAR_ROW, options ),
+            get_character( CHAR_ROW, options ),
+            dirent_type,
+            dirent_name,
+            COLOR_DEFAULT );
 
-        return RV_SUCCESS;
-    }
-
-    return_on_fail( dynstr_append( OutputBuffer, dynstr_data( pre ) ) );
-    return_on_fail(
-            dynstr_appendf( OutputBuffer,
-                            "%s%s%s %s",
-                            get_character( is_last ? CHAR_CORNER : CHAR_JOINT, options ),
-                            get_character( CHAR_ROW, options ),
-                            get_character( CHAR_ROW, options ),
-                            dirent_name ) );
     if ( options->size )
-        return_on_fail( dynstr_appendf( OutputBuffer, PRINT_SIZE_FMTSTR, f_nbytes ) );
-    return_on_fail( dynstr_append( OutputBuffer, "\n" ) );
-
-    if ( dynstr_len( OutputBuffer ) > BUFFER_SIZE )
-    {
-        printf( "%s", dynstr_data( OutputBuffer ) );
-        return_on_fail( dynstr_reset( OutputBuffer ) );
+        printf( PRINT_SIZE_FMTSTR, f_nbytes );
+        printf( "\n" );
     }
-    return RV_SUCCESS;
+
 }
+
 
 int dive( const int dir_fd,
           const struct options *const options,
@@ -205,14 +191,17 @@ int dive( const int dir_fd,
             warn_if_not_silent( options, "fstatat for '%s'", dirent );
             continue;
         }
-        bool is_last = index == list_size( entries ) - 1;
+        const bool is_last = index == list_size( entries ) - 1;
 
-        if ( write_buffered( is_last,
-                             dirent,
-                             pre,
-                             options,
-                             ( unsigned long long ) stat_data.st_size ) != RV_SUCCESS )
-            exit( EXIT_FAILURE );
+        const string_t dirent_type = S_ISDIR( stat_data.st_mode )    ? COLOR_DIR
+                                     : S_ISFIFO( stat_data.st_mode ) ? COLOR_FIFO
+                                     : S_ISSOCK( stat_data.st_mode ) ? COLOR_SOCK
+                                     : S_ISLNK( stat_data.st_mode )  ? COLOR_LNK
+                                     : stat_data.st_mode & ( S_IXUSR | S_IXGRP | S_IXOTH )
+                                             ? COLOR_EXE
+                                             : COLOR_DEFAULT;
+
+        write_dirent( is_last, dirent, dirent_type, pre, options, stat_data.st_size );
 
 
         if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth )
@@ -341,9 +330,7 @@ int main( const int argc, const char *const *const argv )
     options.max_depth      = SIZE_MAX;
     parse_args( argc, argv, paths, &options );
 
-    OutputBuffer = dynstr_init_cap( BUFFER_SIZE * 2 );
-
-    DynamicString dynstr = dynstr_init();
+    struct dynamic_string *dynstr = dynstr_init();
     if ( dynstr == NULL )
         err( EXIT_FAILURE, "fatal error" );
 
@@ -371,10 +358,7 @@ int main( const int argc, const char *const *const argv )
         if ( rv != RV_SUCCESS )
             break;
     }
-    if ( dynstr_len( OutputBuffer ) > 0 )
-        printf( "%s", dynstr_data( OutputBuffer ) );
 
-    dynstr_destroy( OutputBuffer );
     dynstr_destroy( dynstr );
     list_destroy( paths );
 
