@@ -1,14 +1,15 @@
-#include "../CLibs/Dev/errors.h"     /* RVs, warn() */
-#include "../CLibs/misc.h"           /* countof */
-#include "../CLibs/string_utils.h"   /* types */
-#include "../CLibs/Structs/dynarr.h" /* List */
+#include "../CLibs/Dev/errors.h"        /* RVs, warn */
+#include "../CLibs/misc.h"              /* countof */
+#include "../CLibs/string_utils.h"      /* types */
+#include "../CLibs/Structs/dynarr.h"    /* List */
+#include "../CLibs/Structs/dynstring.h" /* dynstr */
 
 #include <dirent.h>   /* directory stuff */
-#include <fcntl.h>    /* open(), close() */
+#include <fcntl.h>    /* open, close */
 #include <stdarg.h>   /* va_list */
-#include <stdio.h>    /* fprintf() */
-#include <stdlib.h>   /* exit() */
-#include <string.h>   /* strcmp() */
+#include <stdio.h>    /* fprintf */
+#include <stdlib.h>   /* exit */
+#include <string.h>   /* strcmp */
 #include <sys/stat.h> /* stat */
 
 // TODO:
@@ -59,7 +60,7 @@ string_t ASCII_CHARSET[ 4 ] = {
 };
 
 enum characters {
-    CHAR_COLUMN = 0,
+    CHAR_COLUMN,
     CHAR_ROW,
     CHAR_CORNER,
     CHAR_JOINT,
@@ -76,11 +77,11 @@ struct options {
     size_t max_depth;  // --depth
 };
 
-#define PRINT_SIZE_FMTSTR " [%llu bytes]"
 
 
 struct dynamic_string *OutputBuffer;
 #define BUFFER_SIZE 1024
+#define PRINT_SIZE_FMTSTR " [%zu bytes]"
 
 
 #define get_character( ENUM_CHAR, OPTS_PTR ) ( OPTS_PTR->charset[ ENUM_CHAR ] )
@@ -114,7 +115,7 @@ static inline void warn_if_not_silent( const struct options *flags, string_t fmt
 //
 //
 
-List *get_entries_sorted( DIR *directory, const struct options *flags )
+List *get_entries_sorted( DIR *const directory, const struct options *const flags )
 {
     List *entries = list_init_type( str_t );
     if ( entries == NULL )
@@ -217,7 +218,7 @@ int dive( const int dir_fd,
         if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth )
             continue;
 
-        int subdir_fd = openat( dir_fd, dirent, O_DIRECTORY | O_RDONLY );
+        const int subdir_fd = openat( dir_fd, dirent, O_DIRECTORY | O_RDONLY );
         if ( subdir_fd == RV_ERROR )
         {
             warn_if_not_silent( options, "trying to open '%s'", dirent );
@@ -225,18 +226,18 @@ int dive( const int dir_fd,
         }
 
         char buf[ 10 ];
-        size_t char_count = snprintf(
-                buf, 10, "%s   ", is_last ? " " : get_character( CHAR_COLUMN, options ) );
-
+        const size_t char_count =
+                snprintf( buf,
+                          sizeof buf,
+                          "%s   ",
+                          is_last ? " " : get_character( CHAR_COLUMN, options ) );
         if ( dynstr_append( pre, buf ) != RV_SUCCESS )
             exit( EXIT_FAILURE );
 
         if ( ( rv = dive( subdir_fd, options, level + 1, pre ) ) != RV_SUCCESS )
             break;
 
-        if ( ( rv = dynstr_slice_e( pre,
-                                    ( ssize_t ) ( dynstr_len( pre ) - char_count ) ) ) !=
-             RV_SUCCESS )
+        if ( ( rv = dynstr_slice_e( pre, -char_count - 1 ) ) != RV_SUCCESS )
             exit( EXIT_FAILURE );
     }
 
@@ -274,7 +275,7 @@ static inline void parse_special( string_t arg, struct options *const options )
 
 void parse_options( string_t opts, struct options *options )
 {
-    size_t str_len = strlen( opts );
+    const size_t str_len = strlen( opts );
     for ( size_t i = 1; i < str_len; ++i )
     {
         switch ( opts[ i ] )
@@ -332,7 +333,7 @@ void parse_args( int argc, const char *const *argv, List *paths, struct options 
     }
 }
 
-int main( int argc, const char *const *const argv )
+int main( const int argc, const char *const *const argv )
 {
     List *paths            = list_init_type( str_t );
     struct options options = { 0 };
@@ -346,12 +347,12 @@ int main( int argc, const char *const *const argv )
     if ( dynstr == NULL )
         err( EXIT_FAILURE, "fatal error" );
 
-    int rv;
+    int rv = RV_EXCEPTION; // value used if no path is specified
     for ( size_t i = 0; i < list_size( paths ); ++i )
     {
         string_t path = list_access( paths, i, string_t );
 
-        int dir_fd = open( path, O_DIRECTORY | O_RDONLY );
+        const int dir_fd = open( path, O_DIRECTORY | O_RDONLY );
         if ( dir_fd == RV_ERROR )
         {
             warn( "could not open '%s'", path );
@@ -362,7 +363,7 @@ int main( int argc, const char *const *const argv )
             continue;
 
         rv = dive( dir_fd, &options, 1, dynstr );
-        // dive closes dir_fd
+        // dive closes dir_fd (for "optimization")
 
         if ( i < list_size( paths ) - 1 )
             printf( "\n" );
@@ -377,5 +378,5 @@ int main( int argc, const char *const *const argv )
     dynstr_destroy( dynstr );
     list_destroy( paths );
 
-    return rv == RV_SUCCESS ? EXIT_SUCCESS : EXIT_FAILURE;
+    return -rv; // RV_E* are negative
 }
