@@ -211,6 +211,30 @@ static void print_link_target( const int dir_at_fd, const string_t dirent )
     printf( " -> '%s'", buffer );
 }
 
+/// Returns the name of the link target
+str_t getlink( const int dir_at_fd, const string_t dirent )
+{
+    char buffer[ PATH_MAX ] = { 0 };
+    if ( readlinkat( dir_at_fd, dirent, buffer, sizeof buffer ) == RV_ERROR )
+    {
+        warn( "readlink( %s )", dirent );
+        return NULL;
+    }
+
+    return strdup( buffer );
+}
+
+/// Returns a color based on the file type
+string_t get_dirent_color( const int st_mode )
+{
+    return S_ISDIR( st_mode )                          ? COLOR_DIR
+           : S_ISLNK( st_mode )                        ? COLOR_LNK
+           : S_ISSOCK( st_mode )                       ? COLOR_SOCK
+           : S_ISFIFO( st_mode )                       ? COLOR_FIFO
+           : st_mode & ( S_IXUSR | S_IXGRP | S_IXOTH ) ? COLOR_EXE
+                                                       : COLOR_DEFAULT;
+}
+
 
 int dive( const int dir_fd,
           const struct options *const options,
@@ -232,7 +256,7 @@ int dive( const int dir_fd,
     str_t dirent;
     for ( size_t index = 0; index < list_size( entries ); ++index, free( dirent ) )
     {
-        dirent = list_access( entries, index, str_t );
+        dirent = list_fetch( entries, index, str_t );
 
         struct stat stat_data;
         if ( fstatat( dir_fd,
@@ -245,13 +269,7 @@ int dive( const int dir_fd,
         }
         const bool is_last = index == list_size( entries ) - 1;
 
-        const string_t dirent_type = S_ISDIR( stat_data.st_mode )    ? COLOR_DIR
-                                     : S_ISFIFO( stat_data.st_mode ) ? COLOR_FIFO
-                                     : S_ISSOCK( stat_data.st_mode ) ? COLOR_SOCK
-                                     : S_ISLNK( stat_data.st_mode )  ? COLOR_LNK
-                                     : stat_data.st_mode & ( S_IXUSR | S_IXGRP | S_IXOTH )
-                                             ? COLOR_EXE
-                                             : COLOR_DEFAULT;
+        const string_t dirent_type = get_dirent_color( stat_data.st_mode );
 
         write_dirent( is_last, dirent, dirent_type, pre, options, stat_data.st_size );
 
@@ -370,28 +388,21 @@ static void parse_args( const int argc,
 
         if ( arg[ 0 ] == '-' )
             parse_options( arg, options );
-
         else if ( list_append( paths, &arg ) != RV_SUCCESS )
-        {
-            f_stack_trace( 0 );
-            exit( EXIT_FAILURE );
-        }
+            exit( f_stack_trace( EXIT_FAILURE ) );
     }
 
-    if ( list_size( paths ) == 0 )
+    if ( list_is_empty( paths ) )
     {
         const string_t curr_dir = ".";
         if ( list_append( paths, &curr_dir ) != RV_SUCCESS )
-        {
-            f_stack_trace( 0 );
-            exit( EXIT_FAILURE );
-        }
+            exit( f_stack_trace( EXIT_FAILURE ) );
     }
 }
 
 int main( const int argc, const char *const *const argv )
 {
-    List *paths            = list_init_type( str_t );
+    List *paths            = list_init_type( string_t );
     struct options options = { 0 };
     options.charset        = UTF_CHARSET;
     options.max_depth      = PATH_MAX; // depth really shouldn't be more than this
@@ -404,7 +415,7 @@ int main( const int argc, const char *const *const argv )
     int rv = RV_EXCEPTION; // value used if no path is specified
     for ( size_t i = 0; i < list_size( paths ); ++i )
     {
-        const string_t path = list_access( paths, i, string_t );
+        const string_t path = list_fetch( paths, i, string_t );
 
         const int dir_fd = open( path, O_DIRECTORY | O_RDONLY );
         if ( dir_fd == RV_ERROR )
@@ -412,7 +423,9 @@ int main( const int argc, const char *const *const argv )
             warn( "could not open '%s'", path );
             continue;
         }
-        printf( "%s\n", path );
+        PrintInColor( stdout, COLOR_DIR, "%s", path );
+        printf( "\n" );
+
         if ( options.max_depth == 0 )
             continue;
 
