@@ -1,7 +1,6 @@
 *
 
 !.gitignore
-!CMakeLists.txt
 
+!CMakeLists.txt
 !*.c
-!*.sh
