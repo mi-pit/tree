@@ -238,8 +238,7 @@ int dive( const int dir_fd,
         if ( fstatat( dir_fd,
                       dirent,
                       &stat_data,
-                      options->follow_links ? AT_SYMLINK_FOLLOW : AT_SYMLINK_NOFOLLOW ) !=
-             RV_SUCCESS )
+                      options->follow_links ? 0 : AT_SYMLINK_NOFOLLOW ) != RV_SUCCESS )
         {
             warn_if_not_silent( options, "fstatat for '%s'", dirent );
             continue;
@@ -344,6 +343,7 @@ static void parse_options( const string_t opts, struct options *options )
                 break;
             case 'l':
                 options->follow_links = true;
+                break;
 
             case '-':
                 parse_special( opts, options );
@@ -394,7 +394,7 @@ int main( const int argc, const char *const *const argv )
     List *paths            = list_init_type( str_t );
     struct options options = { 0 };
     options.charset        = UTF_CHARSET;
-    options.max_depth      = SIZE_MAX;
+    options.max_depth      = PATH_MAX; // depth really shouldn't be more than this
     parse_args( argc, argv, paths, &options );
 
     struct dynamic_string *dynstr = dynstr_init();
