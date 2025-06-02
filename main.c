@@ -13,10 +13,7 @@
 #include <sys/stat.h> /* stat */
 #include <unistd.h>   /* readlink */
 
-/*
- * TODO:
- *  Symlink option
- */
+_Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 
 #define COLOR_RESET "\033[0m"
 #define COLOR_DIR   "\033[1;34m" // bold blue
@@ -26,17 +23,22 @@
 #define COLOR_SOCK  FOREGROUND_GREEN
 
 
+#define DEPTH_OPT "--depth="
+#define HELP_OPT  "--help"
+
+
 /// Help message for the user
-string_t HELP_MESSAGE_MAP[][ 2 ] = {
+const string_t HELP_MESSAGE_MAP[][ 2 ] = {
     { "-a", "Include directory entries whose names begin with a dot." },
     { "-s", "Display the size of each file." },
     { "-c", "Only use ASCII characters." },
     { "-e", "Print an error message to stderr when failing to open/stat/... a file." },
     { "-l", "Acts on the target of a symlink instead of the symlink itself." },
-    { "--depth=%i", "where %i is a positive integer; Only goes %i levels deep (the"
-                    " starting directory is level 0)." },
-    { "--help", "Display this message." }
+    { DEPTH_OPT "%i", "where %i is a positive integer; Only goes %i levels deep (the"
+                      " starting directory is level 0)." },
+    { HELP_OPT, "Display this message." }
 };
+
 
 #define HELP_MESSAGE                                                            \
     "Displays a directory and its sub-directories as a tree, kinda like 'tree'" \
@@ -54,19 +56,24 @@ string_t HELP_MESSAGE_MAP[][ 2 ] = {
 #define CORNER_ASCII "\\"
 #define JOINT_ASCII  "|"
 
-string_t UTF_CHARSET[ 4 ] = {
+
+const string_t UTF_CHARSET[ 4 ] = {
     COLUMN_UTF,
     ROW_UTF,
     CORNER_UTF,
     JOINT_UTF,
 };
 
-string_t ASCII_CHARSET[ 4 ] = {
+const string_t ASCII_CHARSET[ 4 ] = {
     COLUMN_ASCII,
     ROW_ASCII,
     CORNER_ASCII,
     JOINT_ASCII,
 };
+
+_Static_assert( countof( UTF_CHARSET ) == 4 );
+_Static_assert( countof( ASCII_CHARSET ) == 4 );
+
 
 enum characters {
     CHAR_COLUMN,
@@ -77,23 +84,26 @@ enum characters {
 
 
 struct options {
-    bool all;          // -a
-    bool size;         // -s
-    bool warn_on_fail; // -e
-    bool follow_links; // -l
-    string_t *charset; // -c
-                       // default UTF; -c => ASCII
-    size_t max_depth;  // --depth
+    bool all;                // -a
+    bool size;               // -s
+    bool warn_on_fail;       // -e
+    bool follow_links;       // -l
+    const string_t *charset; // -c
+                             // default UTF; -c => ASCII
+    size_t max_depth;        // --depth
 };
 
 
 /* ================================ Helpers ================================ */
 
+/// Format string for `-s`
 #define PRINT_SIZE_FMTSTR " [%zu bytes]"
 
-#define get_character( ENUM_CHAR, OPTS_PTR ) ( OPTS_PTR->charset[ ENUM_CHAR ] )
+/// Fetches a character (string, really) from the charset in OPTS
+#define get_character( ENUM_CHAR, OPTS_PTR ) ( ( OPTS_PTR )->charset[ ( ENUM_CHAR ) ] )
 
 
+/// Skips ".", ".." and, unless `-a` is specified, ".*"
 static inline bool should_skip_entry( const string_t name,
                                       const struct options *const flags )
 {
@@ -103,16 +113,18 @@ static inline bool should_skip_entry( const string_t name,
     return !flags->all && name[ 0 ] == '.';
 }
 
+/// Compares strings; takes pointers to strings (char **)
 static inline int stringp_cmp( const void *d1, const void *d2 )
 {
     return strcmp( *( string_t * ) d1, *( string_t * ) d2 );
 }
 
-static inline void warn_if_not_silent( const struct options *flags,
+/// Prints a warning if `-e` is specified
+static inline void warn_if_not_silent( const struct options *options,
                                        const string_t fmt,
                                        ... )
 {
-    if ( !flags->warn_on_fail )
+    if ( !options->warn_on_fail )
         return;
 
     va_list vaList;
@@ -205,15 +217,17 @@ int dive( const int dir_fd,
           const size_t level,
           struct dynamic_string *const pre )
 {
-    DIR *directory = fdopendir( dir_fd );
+    DIR *const directory = fdopendir( dir_fd );
     if ( directory == NULL )
-        return fflwarn_ret( RV_ERROR, "fdopendir from fd=%i", dir_fd );
+        return fflwarn_ret( RV_ERROR, "fdopendir from fd=%i at lvl=%zu", dir_fd, level );
 
     rewinddir( directory );
 
     int rv = RV_SUCCESS;
 
     List *entries = get_entries_sorted( directory, options );
+    if ( entries == NULL )
+        return f_stack_trace( NULL );
 
     str_t dirent;
     for ( size_t index = 0; index < list_size( entries ); ++index, free( dirent ) )
@@ -278,20 +292,20 @@ int dive( const int dir_fd,
     return rv;
 }
 
-//
-//
 
-static inline void parse_special( const string_t arg, struct options *const options )
+/* ==== OPTS ==== */
+
+
+static void parse_special( const string_t arg, struct options *const options )
 {
-#define DEPTH_OPT "--depth="
     if ( strstr( arg, DEPTH_OPT ) == arg )
     {
-        const char *num_str = arg + sizeof DEPTH_OPT - 1;
+        const char *num_str = arg + STRLEN( DEPTH_OPT );
         options->max_depth  = strtoll( num_str, NULL, 10 );
         if ( errno != E_OK )
             err( EXIT_FAILURE, "invalid depth: '%s'", num_str );
     }
-    else if ( strcmp( arg, "--help" ) == 0 )
+    else if ( strcmp( arg, HELP_OPT ) == 0 )
     {
         printf( HELP_MESSAGE );
         for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
@@ -306,10 +320,9 @@ static inline void parse_special( const string_t arg, struct options *const opti
     {
         errx( EXIT_FAILURE, "unknown option '%s'", arg );
     }
-#undef DEPTH_OPT
 }
 
-void parse_options( const string_t opts, struct options *options )
+static void parse_options( const string_t opts, struct options *options )
 {
     const size_t str_len = strlen( opts );
     bool invalid         = true;
@@ -346,10 +359,10 @@ void parse_options( const string_t opts, struct options *options )
         errx( EXIT_FAILURE, "unknown option '%s'", opts );
 }
 
-void parse_args( const int argc,
-                 const char *const *argv,
-                 List *paths,
-                 struct options *options )
+static void parse_args( const int argc,
+                        const char *const *argv,
+                        List *paths,
+                        struct options *options )
 {
     for ( int i = 1; i < argc; ++i )
     {
@@ -386,7 +399,7 @@ int main( const int argc, const char *const *const argv )
 
     struct dynamic_string *dynstr = dynstr_init();
     if ( dynstr == NULL )
-        err( EXIT_FAILURE, "fatal error" );
+        exit( f_stack_trace( EXIT_FAILURE ) );
 
     int rv = RV_EXCEPTION; // value used if no path is specified
     for ( size_t i = 0; i < list_size( paths ); ++i )
@@ -406,7 +419,7 @@ int main( const int argc, const char *const *const argv )
         rv = dive( dir_fd, &options, 1, dynstr );
         // dive closes dir_fd (for "optimization")
 
-        if ( i < list_size( paths ) - 1 )
+        if ( i < list_size( paths ) - 1 ) // to separate args
             printf( "\n" );
 
         if ( rv != RV_SUCCESS )
