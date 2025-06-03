@@ -326,7 +326,6 @@ int dive( const int dir_fd,
 
 /* ==== OPTS ==== */
 
-
 static void parse_special( const string_t arg, struct options *const options )
 {
     if ( strstr( arg, DEPTH_OPT ) == arg )
