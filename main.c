@@ -1,8 +1,8 @@
-#include "../CLibs/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
-#include "../CLibs/misc.h"              /* countof */
-#include "../CLibs/string_utils.h"      /* types */
-#include "../CLibs/Structs/dynarr.h"    /* List */
-#include "../CLibs/Structs/dynstring.h" /* dynstr */
+#include "../CLibs/src/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
+#include "../CLibs/src/misc.h"              /* countof */
+#include "../CLibs/src/string_utils.h"      /* types */
+#include "../CLibs/src/Structs/dynarr.h"    /* List */
+#include "../CLibs/src/Structs/dynstring.h" /* dynstr */
 
 #include <dirent.h>   /* directory stuff */
 #include <fcntl.h>    /* open, close */
@@ -12,6 +12,9 @@
 #include <string.h>   /* strcmp */
 #include <sys/stat.h> /* stat */
 #include <unistd.h>   /* readlink */
+
+// TODO:
+//  --exclude
 
 _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 
@@ -91,6 +94,7 @@ struct options {
     const string_t *charset; // -c
                              // default UTF; -c => ASCII
     size_t max_depth;        // --depth
+    List *excluded_dirs;     // --exclude
 };
 
 
@@ -321,6 +325,11 @@ static void parse_special( const string_t arg, struct options *const options )
         options->max_depth  = strtoll( num_str, NULL, 10 );
         if ( errno != E_OK )
             err( EXIT_FAILURE, "invalid depth: '%s'", num_str );
+    }
+    else if ( strstr( arg, "--exclude" ) == arg )
+    {
+        // todo:
+        warnx( "not implemented yet" );
     }
     else if ( strcmp( arg, HELP_OPT ) == 0 )
     {
