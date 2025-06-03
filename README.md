@@ -1,5 +1,7 @@
 # tree
 
+Requires [CLibs](https://github.com/mi-pit/CLibs)
+
 ```{bash}
 $ tree --help
 Displays a directory and its sub-directories as a tree, kinda like 'tree' on windows
