@@ -65,7 +65,7 @@ const string_t HELP_MESSAGE_MAP[][ 2 ] = {
 
 #define COLUMN_ASCII "|"
 #define ROW_ASCII    "-"
-#define CORNER_ASCII "\\"
+#define CORNER_ASCII "`"
 #define JOINT_ASCII  "|"
 
 
