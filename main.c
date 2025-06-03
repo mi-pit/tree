@@ -1,8 +1,13 @@
+#include "../CLibs/src/Dev/assert_that.h"   /* assert_that */
 #include "../CLibs/src/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
 #include "../CLibs/src/misc.h"              /* countof */
 #include "../CLibs/src/string_utils.h"      /* types */
 #include "../CLibs/src/Structs/dynarr.h"    /* List */
-#include "../CLibs/src/Structs/dynstring.h" /* dynstr */
+#include "../CLibs/src/Structs/dynstring.h" /* String */
+#include "../CLibs/src/Structs/sets.h"      /* Set */
+
+/* foreach_set */
+#include "../CLibs/src/foreach.h"
 
 #include <dirent.h>   /* directory stuff */
 #include <fcntl.h>    /* open, close */
@@ -26,8 +31,9 @@ _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 #define COLOR_SOCK  FOREGROUND_GREEN
 
 
-#define DEPTH_OPT "--depth="
-#define HELP_OPT  "--help"
+#define DEPTH_OPT   "--depth="
+#define HELP_OPT    "--help"
+#define EXCLUDE_OPT "--exclude="
 
 
 /// Help message for the user
@@ -37,8 +43,11 @@ const string_t HELP_MESSAGE_MAP[][ 2 ] = {
     { "-c", "Only use ASCII characters." },
     { "-e", "Print an error message to stderr when failing to open/stat/... a file." },
     { "-l", "Acts on the target of a symlink instead of the symlink itself." },
-    { DEPTH_OPT "%i", "where %i is a positive integer; Only goes %i levels deep (the"
+    { DEPTH_OPT "%i", "where %i is a non-negative integer; Only goes %i levels deep (the"
                       " starting directory is level 0)." },
+    { EXCLUDE_OPT "%s[,%s]*",
+      "Don't dive into these directories. Strings (names) separated by `,',"
+      " doesn't yet support globbing" },
     { HELP_OPT, "Display this message." }
 };
 
@@ -94,7 +103,7 @@ struct options {
     const string_t *charset; // -c
                              // default UTF; -c => ASCII
     size_t max_depth;        // --depth
-    List *excluded_dirs;     // --exclude
+    Set *excluded_dirs;      // --exclude
 };
 
 
@@ -282,7 +291,8 @@ int dive( const int dir_fd,
 
         printf( "\n" );
 
-        if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth )
+        if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth ||
+             set_search( options->excluded_dirs, dirent, strlen( dirent ) ) )
             continue;
 
         const int subdir_fd = openat( dir_fd, dirent, O_DIRECTORY | O_RDONLY );
@@ -326,10 +336,32 @@ static void parse_special( const string_t arg, struct options *const options )
         if ( errno != E_OK )
             err( EXIT_FAILURE, "invalid depth: '%s'", num_str );
     }
-    else if ( strstr( arg, "--exclude" ) == arg )
+    else if ( strstr( arg, EXCLUDE_OPT ) == arg )
     {
-        // todo:
-        warnx( "not implemented yet" );
+        const char *ex_dirs_str = arg + STRLEN( EXCLUDE_OPT );
+
+        str_t *spl;
+        const ssize_t spl_count = string_split( &spl, ex_dirs_str, ",", 0 );
+        if ( spl_count < 0 )
+            err( EXIT_FAILURE, "error in string split" );
+        if ( spl_count == 0 )
+            errx( EXIT_FAILURE, "exclude ('%s') must contain valid file names", arg );
+
+        foreach_arr ( const str_t, s, spl, spl_count )
+        {
+            if ( strcmp( s, "" ) == 0 )
+            {
+                warnc( EINVAL, "invalid file: '%s'", s );
+                continue;
+            }
+
+            string_strip( s );
+
+            assert( set_insert_f( options->excluded_dirs, s, strlen( s ),
+                                  print_string_direct ) == SETINSERT_INSERTED );
+        }
+
+        string_split_destroy( spl_count, &spl );
     }
     else if ( strcmp( arg, HELP_OPT ) == 0 )
     {
@@ -343,9 +375,7 @@ static void parse_special( const string_t arg, struct options *const options )
         exit( EXIT_SUCCESS );
     }
     else
-    {
         errx( EXIT_FAILURE, "unknown option '%s'", arg );
-    }
 }
 
 static void parse_options( const string_t opts, struct options *options )
@@ -388,8 +418,8 @@ static void parse_options( const string_t opts, struct options *options )
 
 static void parse_args( const int argc,
                         const char *const *argv,
-                        List *paths,
-                        struct options *options )
+                        List *const paths,
+                        struct options *const options )
 {
     for ( int i = 1; i < argc; ++i )
     {
@@ -413,11 +443,13 @@ int main( const int argc, const char *const *const argv )
 {
     List *paths            = list_init_type( string_t );
     struct options options = { 0 };
-    options.charset        = UTF_CHARSET;
-    options.max_depth      = PATH_MAX; // depth really shouldn't be more than this
+    if ( ( options.excluded_dirs = set_init() ) == NULL )
+        err( EXIT_FAILURE, "set_init() failed" );
+    options.charset   = UTF_CHARSET;
+    options.max_depth = SIZE_MAX;
     parse_args( argc, argv, paths, &options );
 
-    struct dynamic_string *dynstr = dynstr_init();
+    String *dynstr = dynstr_init();
     if ( dynstr == NULL )
         exit( f_stack_trace( EXIT_FAILURE ) );
 
@@ -425,6 +457,9 @@ int main( const int argc, const char *const *const argv )
     for ( size_t i = 0; i < list_size( paths ); ++i )
     {
         const string_t path = list_fetch( paths, i, string_t );
+
+        if ( set_search( options.excluded_dirs, path, strlen( path ) ) )
+            continue;
 
         const int dir_fd = open( path, O_DIRECTORY | O_RDONLY );
         if ( dir_fd == RV_ERROR )
@@ -450,6 +485,7 @@ int main( const int argc, const char *const *const argv )
 
     dynstr_destroy( dynstr );
     list_destroy( paths );
+    set_destroy( options.excluded_dirs );
 
     return -rv; // RV_E* are negative
 }
