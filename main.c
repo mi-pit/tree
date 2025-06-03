@@ -368,9 +368,14 @@ static void parse_special( const string_t arg, struct options *const options )
         printf( HELP_MESSAGE );
         for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
         {
-            printf( "\t%s\t %s\n",
-                    HELP_MESSAGE_MAP[ i ][ 0 ],
-                    HELP_MESSAGE_MAP[ i ][ 1 ] );
+            if ( strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) >= 4 )
+                printf( "\t%s\n\t\t %s\n",
+                        HELP_MESSAGE_MAP[ i ][ 0 ],
+                        HELP_MESSAGE_MAP[ i ][ 1 ] );
+            else
+                printf( "\t%s\t %s\n",
+                        HELP_MESSAGE_MAP[ i ][ 0 ],
+                        HELP_MESSAGE_MAP[ i ][ 1 ] );
         }
         exit( EXIT_SUCCESS );
     }
