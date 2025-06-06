@@ -7,7 +7,7 @@
 #include "../CLibs/src/Structs/sets.h"      /* Set */
 
 /* foreach_set */
-#include "../CLibs/src/foreach.h"
+#include "../CLibs/src/Dev/foreach.h"
 
 #include <dirent.h>   /* directory stuff */
 #include <fcntl.h>    /* open, close */
@@ -453,7 +453,7 @@ int main( const int argc, const char *const *const argv )
     options.max_depth = SIZE_MAX;
     parse_args( argc, argv, paths, &options );
 
-    String *dynstr = dynstr_init();
+    DynString *dynstr = dynstr_init();
     if ( dynstr == NULL )
         exit( f_stack_trace( EXIT_FAILURE ) );
 
