@@ -221,7 +221,7 @@ static void print_link_target( const int dir_at_fd, const string_t dirent )
         return;
     }
 
-    printf( " -> '%s'", buffer );
+    printf( " -> %s", buffer );
 }
 
 /// Returns the name of the link target
