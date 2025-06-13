@@ -1,13 +1,13 @@
-#include "../CLibs/src/Dev/assert_that.h"   /* assert_that */
-#include "../CLibs/src/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
-#include "../CLibs/src/misc.h"              /* countof */
-#include "../CLibs/src/string_utils.h"      /* types */
-#include "../CLibs/src/Structs/dynarr.h"    /* List */
-#include "../CLibs/src/Structs/dynstring.h" /* String */
-#include "../CLibs/src/Structs/sets.h"      /* Set */
+#include "../lib/CLibs/src/Dev/assert_that.h"   /* assert_that */
+#include "../lib/CLibs/src/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
+#include "../lib/CLibs/src/misc.h"              /* countof */
+#include "../lib/CLibs/src/string_utils.h"      /* types */
+#include "../lib/CLibs/src/Structs/dynarr.h"    /* List */
+#include "../lib/CLibs/src/Structs/dynstring.h" /* String */
+#include "../lib/CLibs/src/Structs/sets.h"      /* Set */
 
 /* foreach_set */
-#include "../CLibs/src/Dev/foreach.h"
+#include "../lib/CLibs/src/Dev/foreach.h"
 
 #include <dirent.h>   /* directory stuff */
 #include <fcntl.h>    /* open, close */

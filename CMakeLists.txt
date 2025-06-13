@@ -6,11 +6,11 @@ set(CMAKE_C_STANDARD 23)
 add_compile_options(-Wall -Wextra -Werror -pedantic)
 
 add_executable(Tree
-        main.c
-        ../CLibs/src/Structs/dynarr.c
-        ../CLibs/src/Structs/dynstring.c
-        ../CLibs/src/Structs/sets.c
-        ../CLibs/src/item_print_functions.c
-        ../CLibs/src/string_utils.c
-        ../CLibs/src/misc.c
+        src/main.c
+        lib/CLibs/src/Structs/dynarr.c
+        lib/CLibs/src/Structs/dynstring.c
+        lib/CLibs/src/Structs/sets.c
+        lib/CLibs/src/item_print_functions.c
+        lib/CLibs/src/string_utils.c
+        lib/CLibs/src/misc.c
 )
