@@ -19,9 +19,6 @@
 #include <sys/stat.h> /* stat */
 #include <unistd.h>   /* readlink */
 
-// TODO:
-//  --exclude
-
 _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 
 #define COLOR_RESET "\033[0m"
@@ -106,7 +103,6 @@ struct options {
                              // default UTF; -c => ASCII
     size_t max_depth;        // --depth
     Set *excluded_dirs;      // --exclude
-                             // TODO?: make List
 };
 
 
@@ -324,28 +320,54 @@ int dive( const int dir_fd,
 
 /* ==== OPTS ==== */
 
+NoReturn static void print_help_message( void )
+{
+    printf( HELP_MESSAGE );
+    for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
+    {
+        if ( strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) >= 4 /* tab width */ )
+            printf( "\t%s\n\t\t %s\n",
+                    HELP_MESSAGE_MAP[ i ][ 0 ],
+                    HELP_MESSAGE_MAP[ i ][ 1 ] );
+        else
+            printf( "\t%s\t %s\n",
+                    HELP_MESSAGE_MAP[ i ][ 0 ],
+                    HELP_MESSAGE_MAP[ i ][ 1 ] );
+    }
+    exit( EXIT_SUCCESS );
+}
+
 static void parse_special( const string_t arg, struct options *const options )
 {
-    if ( strstr( arg, DEPTH_OPT ) == arg )
+    if ( strncmp( arg, DEPTH_OPT, STRLEN( DEPTH_OPT ) ) == 0 )
     {
+        assert( errno == E_OK );
         const char *num_str = arg + STRLEN( DEPTH_OPT );
-        options->max_depth  = strtoll( num_str, NULL, 10 );
+        char *endptr;
+        const long long ll = strtoll( num_str, &endptr, 10 );
+
         if ( errno != E_OK )
             err( EXIT_FAILURE, "invalid depth: '%s'", num_str );
+        if ( *endptr != '\0' ) // has other stuff after the number
+            errx( EXIT_FAILURE, "invalid depth: '%s'", num_str );
+        if ( ll < 0 )
+            errx( EXIT_FAILURE, "depth must be a positive integer (was given %lli)", ll );
+
+        options->max_depth = ( size_t ) ll;
     }
-    else if ( strstr( arg, EXCLUDE_OPT ) == arg )
+    else if ( strncmp( arg, EXCLUDE_OPT, STRLEN( EXCLUDE_OPT ) ) == 0 )
     {
         const char *ex_dirs_str = arg + STRLEN( EXCLUDE_OPT );
 
         str_t *spl;
-        const ssize_t spl_count =
-                string_split( &spl, ex_dirs_str, ",", STRSPLIT_STRIP_RESULTS );
+        const ssize_t spl_count = string_split(
+                &spl, ex_dirs_str, ",", STRSPLIT_STRIP_RESULTS | STRSPLIT_EXCLUDE_EMPTY );
         if ( spl_count < 0 )
             err( EXIT_FAILURE, "error in string split" );
         if ( spl_count == 0 )
             errx( EXIT_FAILURE, "exclude ('%s') must contain valid file names", arg );
 
-        foreach_arr ( const str_t, s, spl, spl_count )
+        foreach_arr ( str_t const, s, spl, spl_count )
         {
             switch ( set_insert_f( options->excluded_dirs, s, strlen( s ),
                                    print_string_direct ) )
@@ -366,31 +388,17 @@ static void parse_special( const string_t arg, struct options *const options )
         string_split_destroy( spl_count, &spl );
     }
     else if ( strcmp( arg, HELP_OPT ) == 0 )
-    {
-        printf( HELP_MESSAGE );
-        for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
-        {
-            if ( strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) >= 4 /* tab width */ )
-                printf( "\t%s\n\t\t %s\n",
-                        HELP_MESSAGE_MAP[ i ][ 0 ],
-                        HELP_MESSAGE_MAP[ i ][ 1 ] );
-            else
-                printf( "\t%s\t %s\n",
-                        HELP_MESSAGE_MAP[ i ][ 0 ],
-                        HELP_MESSAGE_MAP[ i ][ 1 ] );
-        }
-        exit( EXIT_SUCCESS );
-    }
+        print_help_message();
     else
         errx( EXIT_FAILURE, "unknown option '%s'", arg );
 }
 
 static void parse_options( const string_t opts, struct options *options )
 {
-    const size_t str_len = strlen( opts );
-    for ( size_t i = 1; i < str_len; ++i )
+    bool contained_anything = false;
+    foreach_str( opt_char, opts + 1 )
     {
-        switch ( opts[ i ] )
+        switch ( opt_char )
         {
             case 'a':
                 options->all = true;
@@ -413,11 +421,14 @@ static void parse_options( const string_t opts, struct options *options )
                 return;
 
             default:
-                errx( EXIT_FAILURE, "invalid option: '%c'", opts[ i ] );
+                errx( EXIT_FAILURE, "invalid option: '%c'", opt_char );
         }
+
+        contained_anything = true;
     }
 
-    errx( EXIT_FAILURE, "invalid option '%s'", opts );
+    if ( !contained_anything )
+        errx( EXIT_FAILURE, "invalid option '%s'", opts );
 }
 
 // Exits on error
