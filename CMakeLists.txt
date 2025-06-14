@@ -13,4 +13,6 @@ add_executable(Tree
         lib/CLibs/src/item_print_functions.c
         lib/CLibs/src/string_utils.c
         lib/CLibs/src/misc.c
+        src/args_parse.c
+        src/args_parse.h
 )

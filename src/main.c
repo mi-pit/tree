@@ -1,10 +1,10 @@
 #include "../lib/CLibs/src/Dev/assert_that.h"   /* assert_that */
 #include "../lib/CLibs/src/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
-#include "../lib/CLibs/src/misc.h"              /* countof */
 #include "../lib/CLibs/src/string_utils.h"      /* types */
 #include "../lib/CLibs/src/Structs/dynarr.h"    /* List */
 #include "../lib/CLibs/src/Structs/dynstring.h" /* String */
 #include "../lib/CLibs/src/Structs/sets.h"      /* Set */
+#include "args_parse.h"
 
 /* foreach_set */
 #include "../lib/CLibs/src/Dev/foreach.h"
@@ -30,87 +30,9 @@ _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 #define COLOR_SOCK FOREGROUND_GREEN
 
 
-#define DEPTH_OPT   "--depth="
-#define HELP_OPT    "--help"
-#define EXCLUDE_OPT "--exclude="
-
-
-/// Help message for the user
-const string_t HELP_MESSAGE_MAP[][ 2 ] = {
-    { "-a", "Include directory entries whose names begin with a dot." },
-    { "-s", "Display the size of each file." },
-    { "-c", "Only use ASCII characters." },
-    { "-e", "Print an error message to stderr when failing to open/stat/... a file." },
-    { "-l", "Acts on the target of a symlink instead of the symlink itself." },
-    { DEPTH_OPT "%i", "where %i is a non-negative integer; Only goes %i levels deep (the"
-                      " starting directory is level 0)." },
-    { EXCLUDE_OPT "%s[,%s]*",
-      "Don't dive into these directories. Strings (names) separated by `,'. "
-      "Supports globbing (must be wrapped in quotes, otherwise the args get separated by "
-      "the shell)" },
-    { HELP_OPT, "Display this message." }
-};
-
-
-#define HELP_MESSAGE                                                            \
-    "Displays a directory and its sub-directories as a tree, kinda like 'tree'" \
-    " on windows\n"                                                             \
-    "Options:\n"
-
-
-#define COLUMN_UTF "│"
-#define ROW_UTF    "─"
-#define CORNER_UTF "└"
-#define JOINT_UTF  "├"
-
-#define COLUMN_ASCII "|"
-#define ROW_ASCII    "-"
-#define CORNER_ASCII "`"
-#define JOINT_ASCII  "|"
-
-
-const string_t UTF_CHARSET[ 4 ] = {
-    COLUMN_UTF,
-    ROW_UTF,
-    CORNER_UTF,
-    JOINT_UTF,
-};
-
-const string_t ASCII_CHARSET[ 4 ] = {
-    COLUMN_ASCII,
-    ROW_ASCII,
-    CORNER_ASCII,
-    JOINT_ASCII,
-};
-
-_Static_assert( countof( UTF_CHARSET ) == 4 );
-_Static_assert( countof( ASCII_CHARSET ) == 4 );
-
-
-enum characters {
-    CHAR_COLUMN,
-    CHAR_ROW,
-    CHAR_CORNER,
-    CHAR_JOINT,
-};
-
-
-struct options {
-    bool all;                // -a
-    bool size;               // -s
-    bool warn_on_fail;       // -e
-    bool follow_links;       // -l
-    const string_t *charset; // -c
-                             // default UTF; -c => ASCII
-    size_t max_depth;        // --depth
-    Set *excluded_dirs;      // --exclude
-};
-
-
 /* ================================ Helpers ================================ */
 
 /// Format string for `-s`
-#define PRINT_SIZE_FMTSTR " [%zu bytes]"
 
 /// Fetches a character (string, really) from the charset in OPTS
 #define get_character( ENUM_CHAR, OPTS_PTR ) ( ( OPTS_PTR )->charset[ ( ENUM_CHAR ) ] )
@@ -179,6 +101,32 @@ static List *get_entries_sorted( DIR *const directory, const struct options *con
     return entries;
 }
 
+
+#define KILOBYTE UINT64_C( 1024 )
+#define MEGABYTE ( KILOBYTE * KILOBYTE )
+#define GIGABYTE ( MEGABYTE * KILOBYTE )
+#define TERABYTE ( GIGABYTE * KILOBYTE )
+
+/**
+ * Prints the number of bytes in a file in a human-readable way (like KiB)
+ *
+ * @param nbytes number of bytes (file size)
+ */
+static inline void write_size_human_readable( const uint64_t nbytes )
+{
+    if ( nbytes < KILOBYTE )
+        printf( "%llu B", nbytes );
+    else if ( nbytes < MEGABYTE )
+        printf( "%llu KiB", nbytes / KILOBYTE );
+    else if ( nbytes < GIGABYTE )
+        printf( "%llu MiB", nbytes / MEGABYTE );
+    else if ( nbytes < TERABYTE )
+        printf( "%llu GiB", nbytes / GIGABYTE );
+
+    else
+        printf( "%llu TiB", nbytes / TERABYTE );
+}
+
 /**
  * Prints the directory entry -- tree structure + name (in color) + [optionally] file size
  *
@@ -190,24 +138,32 @@ static List *get_entries_sorted( DIR *const directory, const struct options *con
  * @param options       options (-c, -s)
  * @param f_nbytes      size of file
  */
-static void write_dirent( const bool is_last,
-                          const string_t dirent_name,
-                          const string_t dirent_color,
-                          const struct dynamic_string *const pre,
-                          const struct options *const options,
-                          const size_t f_nbytes )
+static inline void write_dirent( const bool is_last,
+                                 const string_t dirent_name,
+                                 const string_t dirent_color,
+                                 const DynString *const pre,
+                                 const struct options *const options,
+                                 const uint64_t f_nbytes )
 {
     printf( "%s", dynstr_data( pre ) );
-    printf( "%s%s%s %s%s%s",
+    printf( "%s%s%s ",
             get_character( is_last ? CHAR_CORNER : CHAR_JOINT, options ),
             get_character( CHAR_ROW, options ),
-            get_character( CHAR_ROW, options ),
-            dirent_color,
-            dirent_name,
-            COLOR_DEFAULT );
+            get_character( CHAR_ROW, options ) );
 
-    if ( options->size )
-        printf( PRINT_SIZE_FMTSTR, f_nbytes );
+    PrintInColor( stdout, dirent_color, "%s", dirent_name );
+
+    if ( options->size == SIZEOPT_OFF )
+        return;
+
+    printf( " [" );
+
+    if ( options->size == SIZEOPT_BYTES )
+        printf( "%llu bytes", f_nbytes );
+    else
+        write_size_human_readable( f_nbytes );
+
+    printf( "]" );
 }
 
 /// prints "-> ‹name›" for target of a symlink
@@ -247,7 +203,7 @@ bool dirent_is_in_excluded( const struct options *const options, const string_t 
 int dive( const int dir_fd,
           const struct options *const options,
           const size_t level,
-          struct dynamic_string *const pre )
+          DynString *const pre )
 {
     DIR *const directory = fdopendir( dir_fd );
     if ( directory == NULL )
@@ -319,151 +275,10 @@ int dive( const int dir_fd,
 }
 
 
-/* ==== OPTS ==== */
-
-NoReturn static void print_help_message( void )
-{
-    printf( HELP_MESSAGE );
-    for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
-    {
-        if ( strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) >= 4 /* tab width */ )
-            printf( "\t%s\n\t\t %s\n",
-                    HELP_MESSAGE_MAP[ i ][ 0 ],
-                    HELP_MESSAGE_MAP[ i ][ 1 ] );
-        else
-            printf( "\t%s\t %s\n",
-                    HELP_MESSAGE_MAP[ i ][ 0 ],
-                    HELP_MESSAGE_MAP[ i ][ 1 ] );
-    }
-    exit( EXIT_SUCCESS );
-}
-
-static void parse_special( const string_t arg, struct options *const options )
-{
-    if ( strncmp( arg, DEPTH_OPT, STRLEN( DEPTH_OPT ) ) == 0 )
-    {
-        assert( errno == E_OK );
-        const char *num_str = arg + STRLEN( DEPTH_OPT );
-        char *endptr;
-        const long long ll = strtoll( num_str, &endptr, 10 );
-
-        if ( errno != E_OK )
-            err( EXIT_FAILURE, "invalid depth: '%s'", num_str );
-        if ( *endptr != '\0' ) // has other stuff after the number
-            errx( EXIT_FAILURE, "invalid depth: '%s'", num_str );
-        if ( ll < 0 )
-            errx( EXIT_FAILURE, "depth must be a positive integer (was given %lli)", ll );
-
-        options->max_depth = ( size_t ) ll;
-    }
-    else if ( strncmp( arg, EXCLUDE_OPT, STRLEN( EXCLUDE_OPT ) ) == 0 )
-    {
-        const char *ex_dirs_str = arg + STRLEN( EXCLUDE_OPT );
-
-        str_t *spl;
-        const ssize_t spl_count = string_split(
-                &spl, ex_dirs_str, ",", STRSPLIT_STRIP_RESULTS | STRSPLIT_EXCLUDE_EMPTY );
-        if ( spl_count < 0 )
-            err( EXIT_FAILURE, "error in string split" );
-        if ( spl_count == 0 )
-            errx( EXIT_FAILURE, "exclude ('%s') must contain valid file names", arg );
-
-        foreach_arr ( str_t const, s, spl, spl_count )
-        {
-            switch ( set_insert_f( options->excluded_dirs, s, strlen( s ),
-                                   print_string_direct ) )
-            {
-                case RV_ERROR:
-                case RV_EXCEPTION:
-                    errx( EXIT_FAILURE, "set_insert_f failed" );
-
-                case SETINSERT_WAS_IN:
-                    warnx( "duplicate --exclude argument: '%s'", s );
-                    break;
-
-                default:
-                    break;
-            }
-        }
-
-        string_split_destroy( spl_count, &spl );
-    }
-    else if ( strcmp( arg, HELP_OPT ) == 0 )
-        print_help_message();
-    else
-        errx( EXIT_FAILURE, "unknown option '%s'", arg );
-}
-
-static void parse_options( const string_t opts, struct options *options )
-{
-    bool contained_anything = false;
-    foreach_str( opt_char, opts + 1 )
-    {
-        switch ( opt_char )
-        {
-            case 'a':
-                options->all = true;
-                break;
-            case 's':
-                options->size = true;
-                break;
-            case 'c':
-                options->charset = ASCII_CHARSET;
-                break;
-            case 'e':
-                options->warn_on_fail = true;
-                break;
-            case 'l':
-                options->follow_links = true;
-                break;
-
-            case '-':
-                parse_special( opts, options );
-                return;
-
-            default:
-                errx( EXIT_FAILURE, "invalid option: '%c'", opt_char );
-        }
-
-        contained_anything = true;
-    }
-
-    if ( !contained_anything )
-        errx( EXIT_FAILURE, "invalid option '%s'", opts );
-}
-
-// Exits on error
-static void parse_args( const int argc,
-                        const char *const *argv,
-                        List *const paths,
-                        struct options *const options )
-{
-    for ( int i = 1; i < argc; ++i )
-    {
-        const string_t arg = argv[ i ];
-
-        if ( arg[ 0 ] == '-' )
-            parse_options( arg, options );
-        else if ( list_append( paths, &arg ) != RV_SUCCESS )
-            exit( f_stack_trace( EXIT_FAILURE ) );
-    }
-
-    if ( list_is_empty( paths ) )
-    {
-        const string_t curr_dir = ".";
-        if ( list_append( paths, &curr_dir ) != RV_SUCCESS )
-            exit( f_stack_trace( EXIT_FAILURE ) );
-    }
-}
-
 int main( const int argc, const char *const *const argv )
 {
     List *paths            = list_init_type( string_t );
-    struct options options = { 0 };
-    if ( ( options.excluded_dirs = set_init() ) == NULL )
-        err( EXIT_FAILURE, "set_init() failed" );
-    options.charset   = UTF_CHARSET;
-    options.max_depth = SIZE_MAX;
+    struct options options = options_init();
     parse_args( argc, argv, paths, &options );
 
     DynString *dynstr = dynstr_init();
