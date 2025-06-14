@@ -53,4 +53,6 @@ int main( int argc, char **argv )
         if ( close( open( "z_file.txt", O_CREAT | O_TRUNC | O_WRONLY ) ) != 0 )
             warn( "close" );
     }
+
+    return EXIT_SUCCESS;
 }

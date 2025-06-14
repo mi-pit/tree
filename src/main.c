@@ -19,14 +19,15 @@
 #include <sys/stat.h> /* stat */
 #include <unistd.h>   /* readlink */
 
+
 _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 
-#define COLOR_RESET "\033[0m"
-#define COLOR_DIR   "\033[1;34m" // bold blue
-#define COLOR_LNK   FOREGROUND_MAGENTA
-#define COLOR_EXE   FOREGROUND_RED
-#define COLOR_FIFO  FOREGROUND_YELLOW
-#define COLOR_SOCK  FOREGROUND_GREEN
+
+#define COLOR_DIR  "\033[1;34m" // bold blue
+#define COLOR_LNK  FOREGROUND_MAGENTA
+#define COLOR_EXE  FOREGROUND_RED
+#define COLOR_FIFO FOREGROUND_YELLOW
+#define COLOR_SOCK FOREGROUND_GREEN
 
 
 #define DEPTH_OPT   "--depth="
@@ -469,7 +470,6 @@ int main( const int argc, const char *const *const argv )
     if ( dynstr == NULL )
         exit( f_stack_trace( EXIT_FAILURE ) );
 
-    int rv = RV_EXCEPTION; // value used if no path is specified
     for ( size_t i = 0; i < list_size( paths ); ++i )
     {
         const string_t path = list_fetch( paths, i, string_t );
@@ -489,19 +489,17 @@ int main( const int argc, const char *const *const argv )
         if ( options.max_depth == 0 )
             continue;
 
-        rv = dive( dir_fd, &options, 1, dynstr );
-        // dive closes dir_fd (for "optimization")
+        if ( dive( dir_fd, &options, 1, dynstr ) != RV_SUCCESS )
+            // dive closes dir_fd (for "optimization")
+            break;
 
         if ( i < list_size( paths ) - 1 ) // to separate args
             printf( "\n" );
-
-        if ( rv != RV_SUCCESS )
-            break;
     }
 
     dynstr_destroy( dynstr );
     list_destroy( paths );
     set_destroy( options.excluded_dirs );
 
-    return -rv; // RV_E* are negative
+    return -RV_EXCEPTION; // RV_E* are negative
 }
