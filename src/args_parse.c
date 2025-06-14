@@ -32,7 +32,8 @@ const char *const HELP_MESSAGE_MAP[][ 2 ] = {
       "Don't dive into these directories. Strings (names) separated by `,'. "
       "Supports globbing (must be wrapped in quotes, otherwise the args get separated by "
       "the shell)" },
-    { HELP_OPT, "Display this message." }
+    { HELP_OPT, "Display this message." },
+    { "--", "All following arguments are taken as file names, no matter their format." },
 };
 
 
@@ -66,11 +67,11 @@ NoReturn void print_help_message( void )
     for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
     {
         if ( strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) >= 4 /* tab width */ )
-            printf( "\t%s\n\t\t %s\n",
+            printf( "\t`%s`\n\t\t %s\n",
                     HELP_MESSAGE_MAP[ i ][ 0 ],
                     HELP_MESSAGE_MAP[ i ][ 1 ] );
         else
-            printf( "\t%s\t %s\n",
+            printf( "\t`%s`\t %s\n",
                     HELP_MESSAGE_MAP[ i ][ 0 ],
                     HELP_MESSAGE_MAP[ i ][ 1 ] );
     }
@@ -180,14 +181,20 @@ void parse_args( const int argc,
                  List *const paths,
                  struct options *const options )
 {
+    bool stop_options = false;
     for ( int i = 1; i < argc; ++i )
     {
         const string_t arg = argv[ i ];
 
-        if ( arg[ 0 ] == '-' )
+        if ( strcmp( arg, "--" ) == 0 && !stop_options )
+            stop_options = true;
+        else if ( arg[ 0 ] == '-' && !stop_options )
             parse_options( arg, options );
-        else if ( list_append( paths, &arg ) != RV_SUCCESS )
-            exit( f_stack_trace( EXIT_FAILURE ) );
+        else
+        {
+            if ( list_append( paths, &arg ) != RV_SUCCESS )
+                exit( f_stack_trace( EXIT_FAILURE ) );
+        }
     }
 
     if ( list_is_empty( paths ) )
@@ -203,11 +210,12 @@ struct options options_init( void )
 {
     Set *excluded_dirs_set = set_init();
     if ( excluded_dirs_set == NULL )
-        errx( EXIT_FAILURE, "failed to initialize excluded dirs" );
+        err( EXIT_FAILURE, "failed to initialize excluded dirs" );
 
-    return ( struct options ) {
-        .charset       = UTF_CHARSET,
-        .max_depth     = SIZE_MAX,
-        .excluded_dirs = excluded_dirs_set,
-    };
+    struct options options = { 0 };
+    options.charset        = UTF_CHARSET;
+    options.max_depth      = SIZE_MAX;
+    options.excluded_dirs  = excluded_dirs_set;
+
+    return options;
 }
