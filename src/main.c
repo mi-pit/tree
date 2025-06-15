@@ -283,6 +283,7 @@ int main( const int argc, const char *const *const argv )
     if ( dynstr == NULL )
         exit( f_stack_trace( EXIT_FAILURE ) );
 
+    int rv = RV_SUCCESS;
     for ( size_t i = 0; i < list_size( paths ); ++i )
     {
         const string_t path = list_fetch( paths, i, string_t );
@@ -302,7 +303,7 @@ int main( const int argc, const char *const *const argv )
         if ( options.max_depth == 0 )
             continue;
 
-        if ( dive( dir_fd, &options, 1, dynstr ) != RV_SUCCESS )
+        if ( ( rv = dive( dir_fd, &options, 1, dynstr ) ) != RV_SUCCESS )
             // dive closes dir_fd (for "optimization")
             break;
 
@@ -314,5 +315,5 @@ int main( const int argc, const char *const *const argv )
     list_destroy( paths );
     set_destroy( options.excluded_dirs );
 
-    return -RV_EXCEPTION; // RV_E* are negative
+    return -rv; // RV_E* are negative
 }
