@@ -3,7 +3,7 @@
 ## Requirements
 
 * gcc/clang
-* [CLibs](https://github.com/mi-pit/CLibs) (must be located below the current directory)
+* macOS
 
 ## Usage
 
@@ -19,7 +19,7 @@ tree . -asc
 ## Compilation
 
 ```bash
-cc --std=c23 -o tree main.c ../CLibs/src/*.c ../CLibs/src/Structs/*.c
+cc --std=c23 -o tree src/*.c lib/CLibs/src/*.c lib/CLibs/src/Structs/*.c
 ```
 
 ---
@@ -29,6 +29,6 @@ cc --std=c23 -o tree main.c ../CLibs/src/*.c ../CLibs/src/Structs/*.c
 ```bash
 git clone https://github.com/mi-pit/tree
 cd tree
-cc --std=c23 -o tree src/main.c lib/CLibs/src/*.c lib/CLibs/src/Structs/*.c
+cc --std=c23 -o tree src/*.c lib/CLibs/src/*.c lib/CLibs/src/Structs/*.c
 ./tree
 ```
