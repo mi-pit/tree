@@ -57,8 +57,8 @@ const char *const ASCII_CHARSET[ 4 ] = {
     JOINT_ASCII,
 };
 
-_Static_assert( countof( UTF_CHARSET ) == 4 );
-_Static_assert( countof( ASCII_CHARSET ) == 4 );
+_Static_assert( countof( UTF_CHARSET ) == 4, "Charsets must have 4 'chars'" );
+_Static_assert( countof( ASCII_CHARSET ) == 4, "Charsets must have 4 'chars'" );
 
 
 NoReturn void print_help_message( void )
