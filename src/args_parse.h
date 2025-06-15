@@ -4,9 +4,9 @@
 
 #ifndef ARGS_PARSE_H
 #define ARGS_PARSE_H
-#include "../lib/CLibs/src/misc.h"           /* countof */
-#include "../lib/CLibs/src/Structs/dynarr.h" /* List */
-#include "../lib/CLibs/src/Structs/sets.h"   /* Set */
+
+#include "../lib/CLibs/src/structs/dynarr.h" /* List */
+#include "../lib/CLibs/src/structs/sets.h"   /* Set */
 
 
 #define DEPTH_OPT   "--depth="

@@ -1,13 +1,13 @@
-#include "../lib/CLibs/src/Dev/assert_that.h"   /* assert_that */
-#include "../lib/CLibs/src/Dev/errors.h"        /* RVs, warn, terminal colors, PATH_MAX */
-#include "../lib/CLibs/src/string_utils.h"      /* types */
-#include "../lib/CLibs/src/Structs/dynarr.h"    /* List */
-#include "../lib/CLibs/src/Structs/dynstring.h" /* String */
-#include "../lib/CLibs/src/Structs/sets.h"      /* Set */
+#include "../lib/CLibs/src/headers/assert_that.h" /* assert_that */
+#include "../lib/CLibs/src/headers/errors.h"      /* RVs, warn, colors, PATH_MAX */
+#include "../lib/CLibs/src/string_utils.h"        /* types */
+#include "../lib/CLibs/src/structs/dynarr.h"      /* List */
+#include "../lib/CLibs/src/structs/dynstring.h"   /* String */
+#include "../lib/CLibs/src/structs/sets.h"        /* Set */
 #include "args_parse.h"
 
 /* foreach_set */
-#include "../lib/CLibs/src/Dev/foreach.h"
+#include "../lib/CLibs/src/headers/foreach.h"
 
 #include <dirent.h>   /* directory stuff */
 #include <fcntl.h>    /* open, close */
@@ -131,7 +131,7 @@ static inline void write_size_human_readable( const uint64_t nbytes )
  * @param is_last true if dirent is the last printable entry in the directory
  * @param dirent_name   name of the entry
  * @param dirent_color  color string for the specific type
- *                      (see \code CLibs/Dev/terminal_colors.h\endcode)
+ *                      (see \code CLibs/headers/terminal_colors.h\endcode)
  * @param pre           tree structure
  * @param options       options (-c, -s)
  * @param f_nbytes      size of file

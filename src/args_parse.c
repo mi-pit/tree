@@ -4,13 +4,13 @@
 
 #include "args_parse.h"
 
-#include "../lib/CLibs/src/Dev/attributes.h" /* NoReturn */
-#include "../lib/CLibs/src/Dev/errors.h"     /* err, errno, RV_ */
-#include "../lib/CLibs/src/Dev/foreach.h"    /* foreach */
-#include "../lib/CLibs/src/misc.h"           /* countof */
-#include "../lib/CLibs/src/string_utils.h"   /* string_split */
-#include "../lib/CLibs/src/Structs/dynarr.h" /* List */
-#include "../lib/CLibs/src/Structs/sets.h"   /* Set */
+#include "../lib/CLibs/src/headers/attributes.h" /* NoReturn */
+#include "../lib/CLibs/src/headers/errors.h"     /* err, errno, RV_ */
+#include "../lib/CLibs/src/headers/foreach.h"    /* foreach */
+#include "../lib/CLibs/src/headers/misc.h"       /* countof */
+#include "../lib/CLibs/src/string_utils.h"       /* string_split */
+#include "../lib/CLibs/src/structs/dynarr.h"     /* List */
+#include "../lib/CLibs/src/structs/sets.h"       /* Set */
 
 #include <assert.h>
 #include <stdio.h>
