@@ -66,14 +66,10 @@ NoReturn void print_help_message( void )
     printf( HELP_MESSAGE );
     for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
     {
-        if ( strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) >= 4 /* tab width */ )
-            printf( "\t`%s`\n\t\t %s\n",
-                    HELP_MESSAGE_MAP[ i ][ 0 ],
-                    HELP_MESSAGE_MAP[ i ][ 1 ] );
-        else
-            printf( "\t`%s`\t %s\n",
-                    HELP_MESSAGE_MAP[ i ][ 0 ],
-                    HELP_MESSAGE_MAP[ i ][ 1 ] );
+        printf( "\t`%s`%s\t %s\n",
+                HELP_MESSAGE_MAP[ i ][ 0 ],
+                strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) + 2 >= 8 ? "\n\t" : "",
+                HELP_MESSAGE_MAP[ i ][ 1 ] );
     }
     exit( EXIT_SUCCESS );
 }
