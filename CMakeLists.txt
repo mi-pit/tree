@@ -7,12 +7,11 @@ add_compile_options(-Wall -Wextra -Werror -pedantic)
 
 add_executable(Tree
         src/main.c
-        lib/CLibs/src/Structs/dynarr.c
-        lib/CLibs/src/Structs/dynstring.c
-        lib/CLibs/src/Structs/sets.c
+        lib/CLibs/src/structs/dynarr.c
+        lib/CLibs/src/structs/dynstring.c
+        lib/CLibs/src/structs/sets.c
         lib/CLibs/src/item_print_functions.c
         lib/CLibs/src/string_utils.c
-        lib/CLibs/src/misc.c
         src/args_parse.c
         src/args_parse.h
 )
