@@ -23,9 +23,9 @@ tree . -asc
 cc --std=c11 -D_POSIX_C_SOURCE=200809L -o tree src/*.c lib/CLibs/src/*.c lib/CLibs/src/Structs/*.c
 ```
 
----
+(`std` may also be `c17`/`c23`/`c2x`)
 
-## Example
+### Example
 
 ```bash
 git clone --recursive https://github.com/mi-pit/tree
@@ -43,3 +43,5 @@ Tested on
 * macOS Sequoia
 * macOS Monterrey
 * Red Hat Enterprise Linux
+
+Doesn't have recursive link detection (does have a maximum depth set to SIZE_MAX by default)
