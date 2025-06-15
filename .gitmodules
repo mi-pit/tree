@@ -1,0 +1,3 @@
+[submodule "lib/CLibs"]
+	path = lib/CLibs
+	url = https://github.com/mi-pit/CLibs.git
