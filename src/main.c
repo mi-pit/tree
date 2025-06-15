@@ -23,7 +23,7 @@
 _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 
 
-#define COLOR_DIR  "\033[1;34m" // bold blue
+#define COLOR_DIR  FOREGROUND_BLUE
 #define COLOR_LNK  FOREGROUND_MAGENTA
 #define COLOR_EXE  FOREGROUND_RED
 #define COLOR_FIFO FOREGROUND_YELLOW
@@ -31,8 +31,6 @@ _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 
 
 /* ================================ Helpers ================================ */
-
-/// Format string for `-s`
 
 /// Fetches a character (string, really) from the charset in OPTS
 #define get_character( ENUM_CHAR, OPTS_PTR ) ( ( OPTS_PTR )->charset[ ( ENUM_CHAR ) ] )
