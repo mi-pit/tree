@@ -35,7 +35,7 @@ _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 /* ================================ Helpers ================================ */
 
 struct DirectoryEntry {
-    str_t name;
+    char name[ PATH_MAX ];
     off_t size;
     mode_t mode;
 };
@@ -101,7 +101,7 @@ static List *get_entries_sorted( const int dir_fd,
 {
     List *const entries = list_init_type( struct DirectoryEntry );
     if ( entries == NULL )
-        return ( void * ) f_stack_trace( NULL );
+        err( EXIT_FAILURE, "list_init" );
 
     const struct dirent *dirent;
     while ( ( dirent = readdir( directory ) ) != NULL )
@@ -116,19 +116,15 @@ static List *get_entries_sorted( const int dir_fd,
             continue;
         }
 
-        const str_t name = strdup( dirent->d_name );
-        if ( name == NULL )
-            err( EXIT_FAILURE, "strdup" );
-
-        struct DirectoryEntry entry = { .name = name,
-                                        .size = stat_data.st_size,
+        struct DirectoryEntry entry = { .size = stat_data.st_size,
                                         .mode = stat_data.st_mode };
+        strcpy( entry.name, dirent->d_name );
 
         if ( should_skip_entry( &entry, options ) )
             continue;
 
         if ( list_append( entries, &entry ) != RV_SUCCESS )
-            return ( void * ) f_stack_trace( NULL );
+            err( EXIT_FAILURE, "list_append" );
     }
 
     rewinddir( directory );
@@ -229,9 +225,9 @@ static inline string_t get_dirent_color( const int st_mode )
 }
 
 
-bool dirent_is_in_excluded( const struct options *const options, const string_t dirent )
+bool dirent_is_in_excluded( const Set *excluded_dirs, const string_t dirent )
 {
-    foreach_set ( options->excluded_dirs )
+    foreach_set ( excluded_dirs )
         if ( fnmatch( entry.item->data, dirent, 0 ) == 0 )
             return true;
     return false;
@@ -248,14 +244,10 @@ int dive( const int dir_fd,
 
     rewinddir( directory );
 
-    int rv = RV_SUCCESS;
-
     List *entries = get_entries_sorted( dir_fd, directory, options );
-    if ( entries == NULL )
-        return f_stack_trace( RV_ERROR );
 
     struct DirectoryEntry dirent;
-    for ( size_t index = 0; index < list_size( entries ); ++index, free( dirent.name ) )
+    for ( size_t index = 0; index < list_size( entries ); ++index )
     {
         dirent = list_fetch( entries, index, struct DirectoryEntry );
 
@@ -274,7 +266,7 @@ int dive( const int dir_fd,
         printf( "\n" );
 
         if ( !S_ISDIR( dirent.mode ) || level == options->max_depth ||
-             dirent_is_in_excluded( options, dirent.name ) )
+             dirent_is_in_excluded( options->excluded_dirs, dirent.name ) )
             continue;
 
         const int subdir_fd = openat( dir_fd, dirent.name, O_DIRECTORY | O_RDONLY );
@@ -293,8 +285,7 @@ int dive( const int dir_fd,
         if ( dynstr_append( pre, buf ) != RV_SUCCESS )
             exit( EXIT_FAILURE );
 
-        if ( ( rv = dive( subdir_fd, options, level + 1, pre ) ) != RV_SUCCESS )
-            break;
+        goto_on_fail( ERROR, dive( subdir_fd, options, level + 1, pre ) );
 
         if ( dynstr_slice_e( pre, -char_count - 1 ) != RV_SUCCESS )
             exit( EXIT_FAILURE );
@@ -302,13 +293,18 @@ int dive( const int dir_fd,
 
     list_destroy( entries );
     closedir( directory );
-    return rv;
+    return RV_SUCCESS;
+
+ERROR:
+    list_destroy( entries );
+    closedir( directory );
+    return RV_ERROR;
 }
 
 
 int main( const int argc, const char *const *const argv )
 {
-    List *paths            = list_init_type( string_t );
+    List *paths            = list_init_type( str_t );
     struct options options = options_init();
     parse_args( argc, argv, paths, &options );
 
