@@ -30,7 +30,7 @@ cc --std=c11 -D_POSIX_C_SOURCE=200809L -o tree src/*.c lib/CLibs/src/*.c lib/CLi
 ```bash
 git clone --recursive https://github.com/mi-pit/tree
 cd tree
-cc --std=c11 -D_POSIX_C_SOURCE=200809L -o tree src/*.c lib/CLibs/src/*.c lib/CLibs/src/Structs/*.c
+cc --std=c11 -D_POSIX_C_SOURCE=200809L -o tree src/*.c lib/CLibs/src/*.c lib/CLibs/src/structs/*.c
 ./tree
 ```
 
