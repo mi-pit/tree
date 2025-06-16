@@ -45,7 +45,7 @@ struct DirectoryEntry {
 #define get_character( ENUM_CHAR, OPTS_PTR ) ( ( OPTS_PTR )->charset[ ( ENUM_CHAR ) ] )
 
 
-/// Compares strings; takes pointers to strings (char **)
+/// Compares dirents by name
 static inline int dirent_cmp( const void *d1, const void *d2 )
 {
     const struct DirectoryEntry *e1 = ( struct DirectoryEntry * ) d1;
@@ -160,31 +160,38 @@ static inline void write_size_human_readable( const uint64_t nbytes )
         printf( "%llu TiB", nbytes / TERABYTE );
 }
 
+/// Returns a color based on the file type
+static inline string_t get_dirent_color( const int st_mode )
+{
+    return S_ISDIR( st_mode )                          ? COLOR_DIR
+           : S_ISLNK( st_mode )                        ? COLOR_LNK
+           : S_ISSOCK( st_mode )                       ? COLOR_SOCK
+           : S_ISFIFO( st_mode )                       ? COLOR_FIFO
+           : st_mode & ( S_IXUSR | S_IXGRP | S_IXOTH ) ? COLOR_EXE
+                                                       : COLOR_DEFAULT;
+}
+
 /**
  * Prints the directory entry -- tree structure + name (in color) + [optionally] file size
  *
- * @param is_last true if dirent is the last printable entry in the directory
- * @param dirent_name   name of the entry
- * @param dirent_color  color string for the specific type
- *                      (see \code CLibs/headers/terminal_colors.h\endcode)
- * @param pre           tree structure
- * @param options       options (-c, -s)
- * @param f_nbytes      size of file
+ * @param is_last   true if dirent is the last printable entry in the directory
+ * @param dirent    name of the entry
+ * @param pre       tree structure
+ * @param options   options (-c, -s)
  */
 static inline void write_dirent( const bool is_last,
-                                 const string_t dirent_name,
-                                 const string_t dirent_color,
+                                 const struct DirectoryEntry *dirent,
                                  const DynString *const pre,
-                                 const struct options *const options,
-                                 const uint64_t f_nbytes )
+                                 const struct options *const options )
 {
+    const string_t dirent_color = get_dirent_color( dirent->mode );
     printf( "%s", dynstr_data( pre ) );
     printf( "%s%s%s ",
             get_character( is_last ? CHAR_CORNER : CHAR_JOINT, options ),
             get_character( CHAR_ROW, options ),
             get_character( CHAR_ROW, options ) );
 
-    PrintInColor( stdout, dirent_color, "%s", dirent_name );
+    PrintInColor( stdout, dirent_color, "%s", dirent->name );
 
     if ( options->size == SIZEOPT_OFF )
         return;
@@ -192,9 +199,9 @@ static inline void write_dirent( const bool is_last,
     printf( " [" );
 
     if ( options->size == SIZEOPT_BYTES )
-        printf( "%llu bytes", f_nbytes );
+        printf( "%llu bytes", dirent->size );
     else
-        write_size_human_readable( f_nbytes );
+        write_size_human_readable( dirent->size );
 
     printf( "]" );
 }
@@ -211,17 +218,6 @@ static void print_link_target( const int dir_at_fd, const string_t dirent )
     }
 
     printf( " -> %s", buffer );
-}
-
-/// Returns a color based on the file type
-static inline string_t get_dirent_color( const int st_mode )
-{
-    return S_ISDIR( st_mode )                          ? COLOR_DIR
-           : S_ISLNK( st_mode )                        ? COLOR_LNK
-           : S_ISSOCK( st_mode )                       ? COLOR_SOCK
-           : S_ISFIFO( st_mode )                       ? COLOR_FIFO
-           : st_mode & ( S_IXUSR | S_IXGRP | S_IXOTH ) ? COLOR_EXE
-                                                       : COLOR_DEFAULT;
 }
 
 
@@ -256,9 +252,7 @@ int dive( const int dir_fd,
 
         const bool is_last = index == list_size( entries ) - 1;
 
-        const string_t dirent_type = get_dirent_color( dirent.mode );
-
-        write_dirent( is_last, dirent.name, dirent_type, pre, options, dirent.size );
+        write_dirent( is_last, &dirent, pre, options );
 
         if ( S_ISLNK( dirent.mode ) )
             print_link_target( dir_fd, dirent.name );
