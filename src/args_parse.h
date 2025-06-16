@@ -9,11 +9,6 @@
 #include "../lib/CLibs/src/structs/sets.h"   /* Set */
 
 
-#define DEPTH_OPT   "--depth="
-#define HELP_OPT    "--help"
-#define EXCLUDE_OPT "--exclude="
-
-
 #define COLUMN_UTF "│"
 #define ROW_UTF    "─"
 #define CORNER_UTF "└"

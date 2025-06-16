@@ -18,6 +18,11 @@
 #include <string.h>
 
 
+#define DEPTH_OPT   "--depth="
+#define HELP_OPT    "--help"
+#define EXCLUDE_OPT "--exclude="
+
+
 /// Help message for the user
 const char *const HELP_MESSAGE_MAP[][ 2 ] = {
     { "-a", "Include directory entries whose names begin with a dot." },
