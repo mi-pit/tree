@@ -28,9 +28,10 @@ const char *const HELP_MESSAGE_MAP[][ 2 ] = {
     { "-a", "Include directory entries whose names begin with a dot." },
     { "-s", "Display the size of each file." },
     { "-S", "Display the size of each file in bytes." },
+    { "-d", "Only list directories." },
+    { "-l", "Acts on the target of a symlink instead of the symlink itself." },
     { "-c", "Only use ASCII characters." },
     { "-e", "Print an error message to stderr when failing to open/stat/... a file." },
-    { "-l", "Acts on the target of a symlink instead of the symlink itself." },
     { DEPTH_OPT "%i", "where %i is a non-negative integer; Only goes %i levels deep (the"
                       " starting directory is level 0)." },
     { EXCLUDE_OPT "%s[,%s]*",
@@ -159,6 +160,9 @@ void parse_options( const string_t opts, struct options *options )
                 break;
             case 'l':
                 options->follow_links = true;
+                break;
+            case 'd':
+                options->only_dirs = true;
                 break;
 
             case '-':

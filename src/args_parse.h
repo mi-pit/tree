@@ -41,6 +41,7 @@ struct options {
     enum SizeOption size;       // -s | -S
     bool warn_on_fail;          // -e
     bool follow_links;          // -l
+    bool only_dirs;             // -d
     const char *const *charset; // -c
                                 // default UTF; -c => ASCII
     size_t max_depth;           // --depth

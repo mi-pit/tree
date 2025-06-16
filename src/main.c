@@ -1,12 +1,14 @@
-#include "../lib/CLibs/src/headers/assert_that.h" /* assert_that */
-#include "../lib/CLibs/src/headers/errors.h"      /* RVs, warn, colors, PATH_MAX */
-#include "../lib/CLibs/src/string_utils.h"        /* types */
-#include "../lib/CLibs/src/structs/dynarr.h"      /* List */
-#include "../lib/CLibs/src/structs/dynstring.h"   /* String */
-#include "../lib/CLibs/src/structs/sets.h"        /* Set */
+/* tree */
 #include "args_parse.h"
 
-/* foreach_set */
+/* libs */
+#include "../lib/CLibs/src/headers/errors.h"    /* RVs, warn, colors, PATH_MAX */
+#include "../lib/CLibs/src/string_utils.h"      /* types */
+#include "../lib/CLibs/src/structs/dynarr.h"    /* List */
+#include "../lib/CLibs/src/structs/dynstring.h" /* String */
+#include "../lib/CLibs/src/structs/sets.h"      /* Set */
+
+/* foreach_set; must be after #include "sets.h" */
 #include "../lib/CLibs/src/headers/foreach.h"
 
 #include <dirent.h>   /* directory stuff */
@@ -32,24 +34,24 @@ _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
 
 /* ================================ Helpers ================================ */
 
+struct DirectoryEntry {
+    str_t name;
+    off_t size;
+    mode_t mode;
+};
+
+
 /// Fetches a character (string, really) from the charset in OPTS
 #define get_character( ENUM_CHAR, OPTS_PTR ) ( ( OPTS_PTR )->charset[ ( ENUM_CHAR ) ] )
 
 
-/// Skips ".", ".." and, unless `-a` is specified, ".*"
-static inline bool should_skip_entry( const string_t name,
-                                      const struct options *const flags )
-{
-    if ( strcmp( name, "." ) == 0 || strcmp( name, ".." ) == 0 )
-        return true;
-
-    return !flags->all && name[ 0 ] == '.';
-}
-
 /// Compares strings; takes pointers to strings (char **)
-static inline int stringp_cmp( const void *d1, const void *d2 )
+static inline int dirent_cmp( const void *d1, const void *d2 )
 {
-    return strcmp( *( string_t * ) d1, *( string_t * ) d2 );
+    const struct DirectoryEntry *e1 = ( struct DirectoryEntry * ) d1;
+    const struct DirectoryEntry *e2 = ( struct DirectoryEntry * ) d2;
+
+    return strcmp( e1->name, e2->name );
 }
 
 /// Prints a warning if `-e` is specified
@@ -69,32 +71,69 @@ static inline void warn_if_not_silent( const struct options *options,
 
 /* ================================ Dirent Stuff ================================ */
 
+/// Skips ".", ".." and, unless `-a` is specified, ".*"
+static inline bool should_skip_entry( const struct DirectoryEntry *const dirent,
+                                      const struct options *const options )
+{
+    const string_t name = dirent->name;
+    const mode_t mode   = dirent->mode;
+
+    if ( strcmp( name, "." ) == 0 || strcmp( name, ".." ) == 0 )
+        return true;
+
+    if ( options->only_dirs && !S_ISDIR( mode ) )
+        return true;
+
+    return !options->all && name[ 0 ] == '.';
+}
+
 /**
  * Gets an alphabetically sorted list of directory entries
  *
- * @param directory directory to go through
- * @param flags options for \code should_skip_entry\endcode
- * @return List (struct dynamic_array) of directory-entry names
+ * @param dir_fd    directory to go through (fd)
+ * @param directory directory to go through (DIR struct)
+ * @param options   options for \code should_skip_entry\endcode and \code warn_if_not_silent\endcode
+ * @return List of directory-entries (\code struct DirectoryEntry\endcode)
  */
-static List *get_entries_sorted( DIR *const directory, const struct options *const flags )
+static List *get_entries_sorted( const int dir_fd,
+                                 DIR *const directory,
+                                 const struct options *const options )
 {
-    List *entries = list_init_type( str_t );
+    List *const entries = list_init_type( struct DirectoryEntry );
     if ( entries == NULL )
         return ( void * ) f_stack_trace( NULL );
 
-    struct dirent *dirent;
+    const struct dirent *dirent;
     while ( ( dirent = readdir( directory ) ) != NULL )
     {
-        if ( should_skip_entry( dirent->d_name, flags ) )
+        struct stat stat_data;
+        if ( fstatat( dir_fd,
+                      dirent->d_name,
+                      &stat_data,
+                      options->follow_links ? 0 : AT_SYMLINK_NOFOLLOW ) != RV_SUCCESS )
+        {
+            warn_if_not_silent( options, "could not stat '%s'", dirent->d_name );
+            continue;
+        }
+
+        const str_t name = strdup( dirent->d_name );
+        if ( name == NULL )
+            err( EXIT_FAILURE, "strdup" );
+
+        struct DirectoryEntry entry = { .name = name,
+                                        .size = stat_data.st_size,
+                                        .mode = stat_data.st_mode };
+
+        if ( should_skip_entry( &entry, options ) )
             continue;
 
-        str_t name = strdup( dirent->d_name );
-        list_append( entries, &name );
+        if ( list_append( entries, &entry ) != RV_SUCCESS )
+            return ( void * ) f_stack_trace( NULL );
     }
 
     rewinddir( directory );
 
-    list_sort( entries, stringp_cmp );
+    list_sort( entries, dirent_cmp );
 
     return entries;
 }
@@ -211,40 +250,34 @@ int dive( const int dir_fd,
 
     int rv = RV_SUCCESS;
 
-    List *entries = get_entries_sorted( directory, options );
+    List *entries = get_entries_sorted( dir_fd, directory, options );
     if ( entries == NULL )
-        return f_stack_trace( NULL );
+        return f_stack_trace( RV_ERROR );
 
-    str_t dirent;
-    for ( size_t index = 0; index < list_size( entries ); ++index, free( dirent ) )
+    struct DirectoryEntry dirent;
+    for ( size_t index = 0; index < list_size( entries ); ++index, free( dirent.name ) )
     {
-        dirent = list_fetch( entries, index, str_t );
+        dirent = list_fetch( entries, index, struct DirectoryEntry );
 
-        struct stat stat_data;
-        if ( fstatat( dir_fd,
-                      dirent,
-                      &stat_data,
-                      options->follow_links ? 0 : AT_SYMLINK_NOFOLLOW ) != RV_SUCCESS )
-        {
-            warn_if_not_silent( options, "fstatat for '%s'", dirent );
+        if ( !S_ISDIR( dirent.mode ) && options->only_dirs )
             continue;
-        }
+
         const bool is_last = index == list_size( entries ) - 1;
 
-        const string_t dirent_type = get_dirent_color( stat_data.st_mode );
+        const string_t dirent_type = get_dirent_color( dirent.mode );
 
-        write_dirent( is_last, dirent, dirent_type, pre, options, stat_data.st_size );
+        write_dirent( is_last, dirent.name, dirent_type, pre, options, dirent.size );
 
-        if ( S_ISLNK( stat_data.st_mode ) )
-            print_link_target( dir_fd, dirent );
+        if ( S_ISLNK( dirent.mode ) )
+            print_link_target( dir_fd, dirent.name );
 
         printf( "\n" );
 
-        if ( !S_ISDIR( stat_data.st_mode ) || level == options->max_depth ||
-             dirent_is_in_excluded( options, dirent ) )
+        if ( !S_ISDIR( dirent.mode ) || level == options->max_depth ||
+             dirent_is_in_excluded( options, dirent.name ) )
             continue;
 
-        const int subdir_fd = openat( dir_fd, dirent, O_DIRECTORY | O_RDONLY );
+        const int subdir_fd = openat( dir_fd, dirent.name, O_DIRECTORY | O_RDONLY );
         if ( subdir_fd == RV_ERROR )
         {
             warn_if_not_silent( options, "trying to open '%s'", dirent );
@@ -263,7 +296,7 @@ int dive( const int dir_fd,
         if ( ( rv = dive( subdir_fd, options, level + 1, pre ) ) != RV_SUCCESS )
             break;
 
-        if ( ( rv = dynstr_slice_e( pre, -char_count - 1 ) ) != RV_SUCCESS )
+        if ( dynstr_slice_e( pre, -char_count - 1 ) != RV_SUCCESS )
             exit( EXIT_FAILURE );
     }
 
