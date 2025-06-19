@@ -33,7 +33,9 @@ enum SizeOption {
     SIZEOPT_BYTES,
     SIZEOPT_HUMAN_READABLE,
 };
+#if defined( _STDC_VERSION ) && _STDC_VERSION >= 201112L
 _Static_assert( SIZEOPT_OFF == 0, "default enum value" );
+#endif // C11+
 
 
 struct options {

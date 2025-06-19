@@ -20,10 +20,8 @@ tree . -asc
 ## Compilation
 
 ```bash
-cc --std=c11 -D_POSIX_C_SOURCE=200809L -o tree src/*.c lib/CLibs/src/*.c lib/CLibs/src/Structs/*.c
+cc --std=c17 -D_POSIX_C_SOURCE=200809L -o tree src/*.c lib/CLibs/src/*.c lib/CLibs/src/structs/*.c
 ```
-
-(`std` may also be `c17`/`c23`/`c2x`)
 
 ### Example
 
@@ -36,7 +34,7 @@ cc --std=c11 -D_POSIX_C_SOURCE=200809L -o tree src/*.c lib/CLibs/src/*.c lib/CLi
 
 ## Other info
 
-Written in pure C, compatible with C11 and newer.
+Written in pure C, compatible with C99 and newer.
 
 Tested on
 

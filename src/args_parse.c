@@ -63,8 +63,10 @@ const char *const ASCII_CHARSET[ 4 ] = {
     JOINT_ASCII,
 };
 
+#if defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
 _Static_assert( countof( UTF_CHARSET ) == 4, "Charsets must have 4 'chars'" );
 _Static_assert( countof( ASCII_CHARSET ) == 4, "Charsets must have 4 'chars'" );
+#endif
 
 
 NoReturn void print_help_message( void )
@@ -72,7 +74,7 @@ NoReturn void print_help_message( void )
     printf( HELP_MESSAGE );
     for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
     {
-        printf( "\t`%s`%s\t %s\n",
+        printf( "\t`%s`%s\t%s\n",
                 HELP_MESSAGE_MAP[ i ][ 0 ],
                 strlen( HELP_MESSAGE_MAP[ i ][ 0 ] ) + 2 >= 8 ? "\n\t" : "",
                 HELP_MESSAGE_MAP[ i ][ 1 ] );

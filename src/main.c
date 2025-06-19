@@ -22,7 +22,9 @@
 #include <unistd.h>   /* readlink */
 
 
+#if defined( __STDC_VERSION__ ) && __STDC_VERSION__ >= 201112L
 _Static_assert( EXIT_SUCCESS == RV_SUCCESS, "Values must be equal" );
+#endif // C11+
 
 
 #define COLOR_DIR  FOREGROUND_BLUE
