@@ -43,10 +43,11 @@ const char *const HELP_MESSAGE_MAP[][ 2 ] = {
 };
 
 
-#define HELP_MESSAGE                                                            \
+#define HELP_MESSAGE_DESCRIPTION                                                \
     "Displays a directory and its sub-directories as a tree, kinda like 'tree'" \
-    " on windows\n"                                                             \
-    "Options:\n"
+    " on windows\n"
+
+#define HELP_MESSAGE_USAGE "Usage: %s [directories|options]\n", get_prog_name()
 
 
 const char *const UTF_CHARSET[ 4 ] = {
@@ -71,7 +72,10 @@ _Static_assert( countof( ASCII_CHARSET ) == 4, "Charsets must have 4 'chars'" );
 
 NoReturn void print_help_message( void )
 {
-    printf( HELP_MESSAGE );
+    printf( HELP_MESSAGE_DESCRIPTION );
+    printf( HELP_MESSAGE_USAGE );
+
+    printf( "Options:\n" );
     for ( size_t i = 0; i < countof( HELP_MESSAGE_MAP ); ++i )
     {
         printf( "\t`%s`%s\t%s\n",
