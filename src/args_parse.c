@@ -26,8 +26,8 @@
 /// Help message for the user
 const char *const HELP_MESSAGE_MAP[][ 2 ] = {
     { "-a", "Include directory entries whose names begin with a dot." },
-    { "-s", "Display the size of each file." },
-    { "-S", "Display the size of each file in bytes." },
+    { "-s (lowercase 'ess')", "Display the size of each file in a human readable way." },
+    { "-S (capital 'ess')", "Display the size of each file in bytes." },
     { "-d", "Only list directories." },
     { "-l", "Acts on the target of a symlink instead of the symlink itself." },
     { "-c", "Only use ASCII characters." },
